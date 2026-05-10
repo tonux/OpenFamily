@@ -22,9 +22,21 @@ export function formatTime(date: Date | string): string {
     });
 }
 
-export function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('fr-FR', {
+import { getCurrencyDefinition } from './currencies';
+
+export function formatCurrency(
+    amount: number,
+    currencyCode?: string | null,
+    options?: Intl.NumberFormatOptions
+): string {
+    const def = getCurrencyDefinition(currencyCode);
+    return new Intl.NumberFormat(def.locale, {
         style: 'currency',
-        currency: 'EUR'
+        currency: def.code,
+        ...options,
     }).format(amount);
+}
+
+export function getCurrencySymbol(currencyCode?: string | null): string {
+    return getCurrencyDefinition(currencyCode).symbol;
 }

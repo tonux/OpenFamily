@@ -21,6 +21,7 @@ export interface User extends BaseEntity {
     email: string;
     password_hash: string;
     name: string;
+    currency?: string | null;
 }
 
 // Family Member

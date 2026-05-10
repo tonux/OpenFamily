@@ -4,11 +4,17 @@ import { query } from '../db';
 import { authMiddleware, AuthRequest, generateToken } from '../middleware/auth';
 import { normalizeEmail } from '../lib/normalize';
 
+// Must stay in sync with shared/src/constants.ts SUPPORTED_CURRENCIES.
+const SUPPORTED_CURRENCY_CODES = new Set([
+    'EUR', 'USD', 'GBP', 'CHF', 'CAD', 'JPY', 'CNY', 'AUD',
+    'XOF', 'XAF', 'MAD', 'TND', 'DZD', 'BRL', 'INR',
+]);
+
 const router = Router();
 
 router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
     try {
-        const result = await query('SELECT id, email, name FROM users WHERE id = $1', [req.userId]);
+        const result = await query('SELECT id, email, name, currency FROM users WHERE id = $1', [req.userId]);
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
@@ -16,6 +22,30 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
         return res.json({ success: true, data: { user: result.rows[0] } });
     } catch (error) {
         console.error('Get current user error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+// Update the authenticated user's preferred currency.
+router.patch('/me/currency', authMiddleware, async (req: AuthRequest, res) => {
+    try {
+        const { currency } = req.body ?? {};
+        if (typeof currency !== 'string' || !SUPPORTED_CURRENCY_CODES.has(currency)) {
+            return res.status(400).json({ success: false, error: 'Unsupported currency' });
+        }
+
+        const result = await query(
+            'UPDATE users SET currency = $1 WHERE id = $2 RETURNING id, email, name, currency',
+            [currency, req.userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        return res.json({ success: true, data: { user: result.rows[0] } });
+    } catch (error) {
+        console.error('Update currency error:', error);
         return res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -48,9 +78,9 @@ router.post('/register', async (req, res) => {
         // Hash password
         const password_hash = await bcrypt.hash(password, 10);
 
-        // Create user
+        // Create user. `currency` is left NULL so the client prompts the user to pick one on first login.
         const result = await query(
-            'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name',
+            'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, currency',
             [normalizedEmail, password_hash, cleanedName]
         );
 
@@ -94,7 +124,7 @@ router.post('/login', async (req, res) => {
         res.json({
             success: true,
             data: {
-                user: { id: user.id, email: user.email, name: user.name },
+                user: { id: user.id, email: user.email, name: user.name, currency: user.currency ?? null },
                 token
             }
         });

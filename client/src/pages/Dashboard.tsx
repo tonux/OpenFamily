@@ -4,6 +4,7 @@ import { ShoppingCart, CheckSquare, Calendar, Wallet, AlertCircle, Activity, Che
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
+import { useCurrency } from '../lib/useCurrency';
 
 interface DashboardStats {
     upcomingAppointments: number;
@@ -17,6 +18,7 @@ const Dashboard: React.FC = () => {
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
+    const { format: formatMoney } = useCurrency();
 
     useEffect(() => {
         loadStats();
@@ -76,7 +78,7 @@ const Dashboard: React.FC = () => {
         },
         {
             title: 'Dépenses du mois',
-            value: `${Number(stats?.thisMonthExpenses || 0).toFixed(0)}€`,
+            value: formatMoney(Number(stats?.thisMonthExpenses || 0), { maximumFractionDigits: 0 }),
             icon: Wallet,
             color: 'text-nexus-amber',
             bgColor: 'bg-orange-50',

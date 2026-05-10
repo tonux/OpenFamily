@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Dialog } from '../components/ui';
+import { useCurrency } from '../lib/useCurrency';
 
 interface ShoppingItem {
     id: string;
@@ -43,6 +44,7 @@ const parseOptionalPositiveNumber = (value: string): number | undefined => {
 };
 
 const ShoppingList: React.FC = () => {
+    const { format: formatMoney } = useCurrency();
     const [items, setItems] = useState<ShoppingItem[]>([]);
     const [templates, setTemplates] = useState<ShoppingTemplate[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -452,7 +454,7 @@ const ShoppingList: React.FC = () => {
                                     <div className="mt-1 flex flex-wrap items-center gap-2 text-micro">
                                         <span className="rounded-pill bg-primary-soft px-2 py-0.5 text-primary">{item.category}</span>
                                         {item.quantity ? <span className="text-muted-foreground">Qt: {item.quantity}</span> : null}
-                                        {item.price ? <span className="text-muted-foreground">{item.price.toFixed(2)} EUR</span> : null}
+                                        {item.price ? <span className="text-muted-foreground">{formatMoney(item.price)}</span> : null}
                                     </div>
                                 </div>
 
@@ -501,7 +503,7 @@ const ShoppingList: React.FC = () => {
             <div className="sticky bottom-20 z-20 rounded-card border border-border bg-card px-4 py-3 shadow-surface lg:bottom-4">
                 <div className="flex items-center justify-between text-caption">
                     <span className="text-muted-foreground">Total estime</span>
-                    <span className="text-body font-semibold text-foreground">{totalPrice.toFixed(2)} EUR</span>
+                    <span className="text-body font-semibold text-foreground">{formatMoney(totalPrice)}</span>
                 </div>
             </div>
 

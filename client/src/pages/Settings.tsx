@@ -1,7 +1,14 @@
 import React, { useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { Download, Upload, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { Card, CardContent, Button } from '../components/ui';
+import { Download, Upload, CheckCircle, AlertCircle, Loader2, Coins } from 'lucide-react';
+import { Card, CardContent, Button, Select } from '../components/ui';
+import { useAuth } from '../contexts/AuthContext';
+import { SUPPORTED_CURRENCIES, DEFAULT_CURRENCY } from '../lib/currencies';
+
+const currencyOptions = SUPPORTED_CURRENCIES.map((c) => ({
+    value: c.code,
+    label: `${c.code} — ${c.name} (${c.symbol})`,
+}));
 
 interface ImportCounts {
     family_members?: number;
@@ -28,6 +35,7 @@ const ENTITY_LABELS: Record<string, string> = {
 };
 
 const Settings: React.FC = () => {
+    const { user, setUserCurrency } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [exportLoading, setExportLoading] = useState(false);
     const [exportError, setExportError] = useState('');
@@ -35,6 +43,28 @@ const Settings: React.FC = () => {
     const [importError, setImportError] = useState('');
     const [importSuccess, setImportSuccess] = useState<ImportCounts | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [currencyDraft, setCurrencyDraft] = useState<string>(user?.currency ?? DEFAULT_CURRENCY);
+    const [currencySaving, setCurrencySaving] = useState(false);
+    const [currencyMessage, setCurrencyMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+    const currentCurrency = user?.currency ?? null;
+    const currencyDirty = currencyDraft !== currentCurrency;
+
+    const handleSaveCurrency = async () => {
+        setCurrencySaving(true);
+        setCurrencyMessage(null);
+        try {
+            await setUserCurrency(currencyDraft);
+            setCurrencyMessage({ kind: 'success', text: 'Devise mise à jour.' });
+        } catch (err) {
+            setCurrencyMessage({
+                kind: 'error',
+                text: err instanceof Error ? err.message : 'Erreur lors de la mise à jour.',
+            });
+        } finally {
+            setCurrencySaving(false);
+        }
+    };
 
     const handleExport = async () => {
         setExportLoading(true);
@@ -102,6 +132,53 @@ const Settings: React.FC = () => {
                 <h2 className="text-title font-bold text-foreground">Paramètres</h2>
                 <p className="text-caption text-muted-foreground">Gérez vos données et préférences.</p>
             </div>
+
+            {/* Currency */}
+            <Card>
+                <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
+                            <Coins className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="text-caption font-semibold text-foreground">Devise</h3>
+                            <p className="mt-1 text-micro text-muted-foreground">
+                                Devise utilisée pour afficher les montants (budget, courses, dashboard). Les
+                                montants déjà saisis ne sont pas convertis lors d'un changement.
+                            </p>
+                            <div className="mt-4 max-w-sm">
+                                <Select
+                                    value={currencyDraft}
+                                    onValueChange={setCurrencyDraft}
+                                    options={currencyOptions}
+                                />
+                            </div>
+                            {currencyMessage && (
+                                <p
+                                    className={`mt-2 flex items-center gap-1 text-micro ${
+                                        currencyMessage.kind === 'error' ? 'text-destructive' : 'text-emerald-600'
+                                    }`}
+                                >
+                                    {currencyMessage.kind === 'error' ? (
+                                        <AlertCircle className="h-4 w-4" />
+                                    ) : (
+                                        <CheckCircle className="h-4 w-4" />
+                                    )}
+                                    {currencyMessage.text}
+                                </p>
+                            )}
+                            <Button
+                                className="mt-4"
+                                onClick={handleSaveCurrency}
+                                disabled={!currencyDirty || currencySaving}
+                            >
+                                {currencySaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Enregistrer
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* Export */}
             <Card>

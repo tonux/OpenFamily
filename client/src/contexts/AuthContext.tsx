@@ -5,6 +5,7 @@ interface User {
     id: string;
     email: string;
     name: string;
+    currency?: string | null;
 }
 
 interface AuthContextType {
@@ -14,6 +15,7 @@ interface AuthContextType {
     register: (email: string, password: string, name: string) => Promise<void>;
     logout: () => void;
     isAuthenticated: boolean;
+    setUserCurrency: (currency: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -103,6 +105,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.removeItem('user');
     };
 
+    const setUserCurrency = async (currency: string) => {
+        const response = await api.patch<{ success: boolean; data: { user: User } }>(
+            '/api/auth/me/currency',
+            { currency }
+        );
+        if (response.success && response.data?.user) {
+            setUser(response.data.user);
+            localStorage.setItem('user', JSON.stringify(response.data.user));
+        }
+    };
+
     return (
         <AuthContext.Provider
             value={{
@@ -112,6 +125,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 register,
                 logout,
                 isAuthenticated: !!user,
+                setUserCurrency,
             }}
         >
             {children}

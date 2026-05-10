@@ -6,6 +6,7 @@ import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Toolti
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { CHART_COLOR_PRESETS } from '../design/colorPresets';
+import { useCurrency } from '../lib/useCurrency';
 
 interface FamilyMember {
     id: string;
@@ -72,6 +73,7 @@ const toNumber = (value: unknown): number => {
 };
 
 const Budget: React.FC = () => {
+    const { format: formatMoney, symbol: currencySymbol } = useCurrency();
     const [entries, setEntries] = useState<BudgetEntry[]>([]);
     const [limits, setLimits] = useState<BudgetLimit[]>([]);
     const [stats, setStats] = useState<BudgetStats | null>(null);
@@ -416,7 +418,7 @@ const Budget: React.FC = () => {
                                                         }`}
                                                 >
                                                     {entry.is_expense ? '-' : '+'}
-                                                    {entry.amount.toFixed(2)}€
+                                                    {formatMoney(entry.amount)}
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -450,7 +452,7 @@ const Budget: React.FC = () => {
                                             <div>
                                                 <p className="text-label text-muted-foreground mb-1">Dépenses</p>
                                                 <p className="text-2xl font-bold text-red-600">
-                                                    {stats.totalExpenses.toFixed(2)}€
+                                                    {formatMoney(stats.totalExpenses)}
                                                 </p>
                                             </div>
                                             <TrendingDown className="h-8 w-8 text-red-600" />
@@ -463,7 +465,7 @@ const Budget: React.FC = () => {
                                             <div>
                                                 <p className="text-label text-muted-foreground mb-1">Revenus</p>
                                                 <p className="text-2xl font-bold text-emerald-600">
-                                                    {stats.totalIncome.toFixed(2)}€
+                                                    {formatMoney(stats.totalIncome)}
                                                 </p>
                                             </div>
                                             <TrendingUp className="h-8 w-8 text-emerald-600" />
@@ -479,7 +481,7 @@ const Budget: React.FC = () => {
                                                     className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-nexus-blue' : 'text-red-600'
                                                         }`}
                                                 >
-                                                    {stats.balance.toFixed(2)}€
+                                                    {formatMoney(stats.balance)}
                                                 </p>
                                             </div>
                                             <DollarSign className="h-8 w-8 text-nexus-blue" />
@@ -557,7 +559,7 @@ const Budget: React.FC = () => {
                                                     <CartesianGrid strokeDasharray="3 3" />
                                                     <XAxis dataKey="name" />
                                                     <YAxis />
-                                                    <Tooltip formatter={(value: number) => `${value.toFixed(2)}€`} />
+                                                    <Tooltip formatter={(value: number) => formatMoney(value)} />
                                                     <Legend />
                                                     {memberCategories.map((cat, i) => (
                                                         <Bar key={cat} dataKey={cat} stackId="a" fill={CHART_COLOR_PRESETS[i % CHART_COLOR_PRESETS.length]} />
@@ -584,7 +586,7 @@ const Budget: React.FC = () => {
                                                 <CartesianGrid strokeDasharray="3 3" />
                                                 <XAxis dataKey="name" />
                                                 <YAxis />
-                                                <Tooltip formatter={(value: number) => `${value.toFixed(2)}€`} />
+                                                <Tooltip formatter={(value: number) => formatMoney(value)} />
                                                 <Legend />
                                                 <Bar dataKey="Dépenses" fill="#ef4444" />
                                                 <Bar dataKey="Revenus" fill="#10b981" />
@@ -629,13 +631,13 @@ const Budget: React.FC = () => {
                                             <div className="flex justify-between text-body-sm">
                                                 <span className="text-muted-foreground">Dépensé:</span>
                                                 <span className={`font-medium ${isOverLimit ? 'text-red-600' : ''}`}>
-                                                    {spending.toFixed(2)}€
+                                                    {formatMoney(spending)}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between text-body-sm">
                                                 <span className="text-muted-foreground">Limite:</span>
                                                 <span className="font-medium">
-                                                    {limit > 0 ? `${limit.toFixed(2)}€` : 'Non définie'}
+                                                    {limit > 0 ? formatMoney(limit) : 'Non définie'}
                                                 </span>
                                             </div>
                                             {limit > 0 && (
@@ -727,7 +729,7 @@ const Budget: React.FC = () => {
                         />
                     </div>
                     <Input
-                        label="Montant (€)"
+                        label={`Montant (${currencySymbol})`}
                         type="number"
                         step="0.01"
                         value={formData.amount}
@@ -795,7 +797,7 @@ const Budget: React.FC = () => {
                         />
                     </div>
                     <Input
-                        label="Limite mensuelle (€)"
+                        label={`Limite mensuelle (${currencySymbol})`}
                         type="number"
                         step="0.01"
                         value={limitFormData.monthly_limit}

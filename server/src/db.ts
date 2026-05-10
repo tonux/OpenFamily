@@ -122,6 +122,8 @@ export const runMigrations = async () => {
         'ALTER TABLE schedule_entries DROP CONSTRAINT IF EXISTS schedule_entries_check',
         'ALTER TABLE schedule_entries ADD COLUMN IF NOT EXISTS specific_date DATE',
         'ALTER TABLE schedule_entries ADD COLUMN IF NOT EXISTS location TEXT',
+        // Multi-currency: nullable so existing users are prompted at next login to confirm.
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS currency VARCHAR(3)',
     ];
 
     for (const migration of migrations) {
