@@ -28,7 +28,7 @@ export const SUPPORTED_CURRENCIES: readonly CurrencyDefinition[] = [
 export const DEFAULT_CURRENCY = 'EUR';
 
 const CURRENCY_BY_CODE = new Map<string, CurrencyDefinition>(
-    SUPPORTED_CURRENCIES.map((c) => [c.code, c])
+    SUPPORTED_CURRENCIES.map((c) => [c.code, c]),
 );
 
 export function getCurrencyDefinition(code: string | null | undefined): CurrencyDefinition {

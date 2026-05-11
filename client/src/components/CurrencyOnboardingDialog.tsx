@@ -28,7 +28,7 @@ const CurrencyOnboardingDialog: React.FC = () => {
         try {
             await setUserCurrency(selected);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Impossible d\'enregistrer la devise.');
+            setError(err instanceof Error ? err.message : "Impossible d'enregistrer la devise.");
         } finally {
             setSubmitting(false);
         }
@@ -44,7 +44,9 @@ const CurrencyOnboardingDialog: React.FC = () => {
         >
             <div className="space-y-4">
                 <div>
-                    <label className="block text-label font-medium text-foreground mb-1.5">Devise</label>
+                    <label className="block text-label font-medium text-foreground mb-1.5">
+                        Devise
+                    </label>
                     <Select
                         value={selected}
                         onValueChange={setSelected}

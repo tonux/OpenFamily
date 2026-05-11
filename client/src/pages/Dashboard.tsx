@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { ShoppingCart, CheckSquare, Calendar, Wallet, AlertCircle, Activity, ChevronRight } from 'lucide-react';
+import {
+    ShoppingCart,
+    CheckSquare,
+    Calendar,
+    Wallet,
+    AlertCircle,
+    Activity,
+    ChevronRight,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
@@ -26,7 +34,9 @@ const Dashboard: React.FC = () => {
 
     const loadStats = async () => {
         try {
-            const response = await api.get<{ success: boolean; data: DashboardStats }>('/api/dashboard');
+            const response = await api.get<{ success: boolean; data: DashboardStats }>(
+                '/api/dashboard',
+            );
             if (response.success) {
                 setStats(response.data);
             }
@@ -42,7 +52,9 @@ const Dashboard: React.FC = () => {
             <div className="flex h-full items-center justify-center min-h-[50vh]">
                 <div className="flex flex-col items-center gap-4">
                     <div className="spinner-brand" />
-                    <p className="text-muted-foreground font-medium animate-pulse">Chargement de votre espace...</p>
+                    <p className="text-muted-foreground font-medium animate-pulse">
+                        Chargement de votre espace...
+                    </p>
                 </div>
             </div>
         );
@@ -92,7 +104,9 @@ const Dashboard: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-h1 text-foreground mb-1">Bonjour ! 👋</h1>
-                    <p className="text-muted-foreground text-body">Voici ce qu'il se passe dans votre famille aujourd'hui.</p>
+                    <p className="text-muted-foreground text-body">
+                        Voici ce qu'il se passe dans votre famille aujourd'hui.
+                    </p>
                 </div>
                 <div className="flex gap-3">
                     <Button variant="secondary" size="sm" onClick={() => navigate('/calendar')}>
@@ -112,8 +126,8 @@ const Dashboard: React.FC = () => {
                             Attention au budget
                         </h3>
                         <p className="text-sm text-amber-800 mt-1">
-                            {stats.budgetAlerts} catégorie{stats.budgetAlerts > 1 ? 's ont' : ' a'} dépassé le
-                            budget mensuel défini.
+                            {stats.budgetAlerts} catégorie{stats.budgetAlerts > 1 ? 's ont' : ' a'}{' '}
+                            dépassé le budget mensuel défini.
                         </p>
                     </div>
                     <Button
@@ -137,12 +151,16 @@ const Dashboard: React.FC = () => {
                         >
                             <CardContent className="p-6 flex items-start justify-between">
                                 <div>
-                                    <p className="text-label text-muted-foreground font-medium mb-1">{card.title}</p>
+                                    <p className="text-label text-muted-foreground font-medium mb-1">
+                                        {card.title}
+                                    </p>
                                     <h3 className="text-3xl font-bold text-foreground tracking-tight group-hover:scale-105 transition-transform origin-left">
                                         {card.value}
                                     </h3>
                                 </div>
-                                <div className={`p-3 rounded-nexus ${card.bgColor} group-hover:rotate-6 transition-transform`}>
+                                <div
+                                    className={`p-3 rounded-nexus ${card.bgColor} group-hover:rotate-6 transition-transform`}
+                                >
                                     <Icon className={`h-6 w-6 ${card.color}`} />
                                 </div>
                             </CardContent>
@@ -168,28 +186,39 @@ const Dashboard: React.FC = () => {
                         <div className="relative overflow-hidden rounded-nexus bg-nexus-background p-6">
                             <div className="absolute top-0 right-0 w-64 h-64 bg-nexus-blue-light/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
 
-                            <h3 className="text-h2 mb-4 relative z-10">Bienvenue sur votre nouvel espace Nexus</h3>
+                            <h3 className="text-h2 mb-4 relative z-10">
+                                Bienvenue sur votre nouvel espace Nexus
+                            </h3>
                             <p className="text-muted-foreground mb-6 max-w-lg relative z-10 text-body-sm">
-                                Nous avons repensé OpenFamily pour vous offrir une expérience plus claire, plus calme et plus efficace.
-                                Profitez d'une gestion familiale simplifiée.
+                                Nous avons repensé OpenFamily pour vous offrir une expérience plus
+                                claire, plus calme et plus efficace. Profitez d'une gestion
+                                familiale simplifiée.
                             </p>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
                                 <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm border border-border/50">
                                     <div className="w-2 h-2 rounded-full bg-nexus-blue"></div>
-                                    <span className="text-body-sm font-medium">Design Neo-Soft</span>
+                                    <span className="text-body-sm font-medium">
+                                        Design Neo-Soft
+                                    </span>
                                 </div>
                                 <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm border border-border/50">
                                     <div className="w-2 h-2 rounded-full bg-nexus-amber"></div>
-                                    <span className="text-body-sm font-medium">Navigation intuitive</span>
+                                    <span className="text-body-sm font-medium">
+                                        Navigation intuitive
+                                    </span>
                                 </div>
                                 <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm border border-border/50">
                                     <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                    <span className="text-body-sm font-medium">Performance accrue</span>
+                                    <span className="text-body-sm font-medium">
+                                        Performance accrue
+                                    </span>
                                 </div>
                                 <div className="flex items-center gap-3 p-3 bg-card rounded-lg shadow-sm border border-border/50">
                                     <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                                    <span className="text-body-sm font-medium">Sécurité renforcée</span>
+                                    <span className="text-body-sm font-medium">
+                                        Sécurité renforcée
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -207,7 +236,9 @@ const Dashboard: React.FC = () => {
                             className="w-full p-4 text-left bg-nexus-background rounded-nexus hover:bg-blue-50 transition-colors cursor-pointer group border border-transparent hover:border-blue-100"
                         >
                             <h3 className="font-semibold text-body-sm mb-1 group-hover:text-nexus-blue transition-colors flex items-center gap-2">
-                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-nexus-blue text-white text-[10px]">1</span>
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-nexus-blue text-white text-[10px]">
+                                    1
+                                </span>
                                 Ajoutez votre famille
                             </h3>
                             <p className="text-label text-muted-foreground pl-7">
@@ -220,7 +251,9 @@ const Dashboard: React.FC = () => {
                             className="w-full p-4 text-left bg-nexus-background rounded-nexus hover:bg-blue-50 transition-colors cursor-pointer group border border-transparent hover:border-blue-100"
                         >
                             <h3 className="font-semibold text-body-sm mb-1 group-hover:text-nexus-blue transition-colors flex items-center gap-2">
-                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-nexus-blue text-white text-[10px]">2</span>
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-nexus-blue text-white text-[10px]">
+                                    2
+                                </span>
                                 Planifiez vos repas
                             </h3>
                             <p className="text-label text-muted-foreground pl-7">
@@ -233,7 +266,9 @@ const Dashboard: React.FC = () => {
                             className="w-full p-4 text-left bg-nexus-background rounded-nexus hover:bg-blue-50 transition-colors cursor-pointer group border border-transparent hover:border-blue-100"
                         >
                             <h3 className="font-semibold text-body-sm mb-1 group-hover:text-nexus-blue transition-colors flex items-center gap-2">
-                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-nexus-blue text-white text-[10px]">3</span>
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-nexus-blue text-white text-[10px]">
+                                    3
+                                </span>
                                 Suivez le budget
                             </h3>
                             <p className="text-label text-muted-foreground pl-7">

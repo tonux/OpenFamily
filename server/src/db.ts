@@ -22,7 +22,8 @@ const pool = new Pool({
 pool.on('error', (err) => {
     logger.error('db.pool_error', {
         error: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error && process.env.NODE_ENV !== 'production' ? err.stack : undefined,
+        stack:
+            err instanceof Error && process.env.NODE_ENV !== 'production' ? err.stack : undefined,
     });
     process.exit(-1);
 });
@@ -45,7 +46,10 @@ export const query = async (text: string, params?: any[]) => {
         logger.error('db.query_error', {
             operation,
             error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error && process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+            stack:
+                error instanceof Error && process.env.NODE_ENV !== 'production'
+                    ? error.stack
+                    : undefined,
         });
         throw error;
     }
@@ -84,8 +88,8 @@ export const runMigrations = async () => {
         'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS emergency_contact_name TEXT',
         'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS emergency_contact_phone TEXT',
         'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS notes TEXT',
-        "UPDATE family_members SET notes = medical_notes WHERE notes IS NULL AND medical_notes IS NOT NULL",
-        "UPDATE family_members SET medications = vaccines WHERE medications IS NULL AND vaccines IS NOT NULL",
+        'UPDATE family_members SET notes = medical_notes WHERE notes IS NULL AND medical_notes IS NOT NULL',
+        'UPDATE family_members SET medications = vaccines WHERE medications IS NULL AND vaccines IS NOT NULL',
         `CREATE TABLE IF NOT EXISTS schedule_entries (
             id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
             user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

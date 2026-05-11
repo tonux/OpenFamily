@@ -67,19 +67,25 @@ const ShoppingList: React.FC = () => {
 
     const loadItems = async () => {
         try {
-            const response = await api.get<{ success: boolean; data: ShoppingItem[] }>('/api/shopping');
+            const response = await api.get<{ success: boolean; data: ShoppingItem[] }>(
+                '/api/shopping',
+            );
             if (response.success) {
                 setItems(response.data);
             }
         } catch (err) {
             console.error('Failed to load shopping items:', err);
-            setError(err instanceof Error ? err.message : 'Impossible de charger la liste de courses.');
+            setError(
+                err instanceof Error ? err.message : 'Impossible de charger la liste de courses.',
+            );
         }
     };
 
     const loadTemplates = async () => {
         try {
-            const response = await api.get<{ success: boolean; data: ShoppingTemplate[] }>('/api/shopping/templates');
+            const response = await api.get<{ success: boolean; data: ShoppingTemplate[] }>(
+                '/api/shopping/templates',
+            );
             if (response.success) {
                 setTemplates(response.data);
             }
@@ -112,17 +118,26 @@ const ShoppingList: React.FC = () => {
         }
 
         try {
-            const response = await api.post<{ success: boolean; data: ShoppingItem }>('/api/shopping', {
-                name: newItem.name,
-                category: newItem.category,
-                quantity,
-                price,
-                unit: newItem.unit || null,
-            });
+            const response = await api.post<{ success: boolean; data: ShoppingItem }>(
+                '/api/shopping',
+                {
+                    name: newItem.name,
+                    category: newItem.category,
+                    quantity,
+                    price,
+                    unit: newItem.unit || null,
+                },
+            );
 
             if (response.success) {
                 setItems((prev) => [response.data, ...prev]);
-                setNewItem({ name: '', category: 'Alimentation', quantity: '', price: '', unit: '' });
+                setNewItem({
+                    name: '',
+                    category: 'Alimentation',
+                    quantity: '',
+                    price: '',
+                    unit: '',
+                });
             }
         } catch (err) {
             console.error('Failed to add item:', err);
@@ -133,15 +148,22 @@ const ShoppingList: React.FC = () => {
     const toggleItem = async (item: ShoppingItem) => {
         setError('');
         try {
-            const response = await api.put<{ success: boolean; data: ShoppingItem }>(`/api/shopping/${item.id}`, {
-                is_checked: !item.is_checked,
-            });
+            const response = await api.put<{ success: boolean; data: ShoppingItem }>(
+                `/api/shopping/${item.id}`,
+                {
+                    is_checked: !item.is_checked,
+                },
+            );
             if (response.success) {
-                setItems((prev) => prev.map((current) => (current.id === item.id ? response.data : current)));
+                setItems((prev) =>
+                    prev.map((current) => (current.id === item.id ? response.data : current)),
+                );
             }
         } catch (err) {
             console.error('Failed to toggle item:', err);
-            setError(err instanceof Error ? err.message : 'Impossible de mettre a jour cet article.');
+            setError(
+                err instanceof Error ? err.message : 'Impossible de mettre a jour cet article.',
+            );
         }
     };
 
@@ -163,7 +185,9 @@ const ShoppingList: React.FC = () => {
             setItems((prev) => prev.filter((item) => !item.is_checked));
         } catch (err) {
             console.error('Failed to clear checked items:', err);
-            setError(err instanceof Error ? err.message : 'Impossible de vider les articles coches.');
+            setError(
+                err instanceof Error ? err.message : 'Impossible de vider les articles coches.',
+            );
         }
     };
 
@@ -198,7 +222,9 @@ const ShoppingList: React.FC = () => {
     const deselectByCategory = (category: string) => {
         setSelectedItemIds((prev) => {
             const next = new Set(prev);
-            items.filter((item) => item.category === category).forEach((item) => next.delete(item.id));
+            items
+                .filter((item) => item.category === category)
+                .forEach((item) => next.delete(item.id));
             return next;
         });
     };
@@ -238,7 +264,7 @@ const ShoppingList: React.FC = () => {
             await loadTemplates();
         } catch (err) {
             console.error('Failed to save template:', err);
-            setError(err instanceof Error ? err.message : 'Impossible d\'enregistrer le template.');
+            setError(err instanceof Error ? err.message : "Impossible d'enregistrer le template.");
         }
     };
 
@@ -291,7 +317,9 @@ const ShoppingList: React.FC = () => {
             <div className="flex h-full min-h-[50vh] items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
                     <div className="spinner-brand" />
-                    <p className="animate-pulse font-medium text-muted-foreground">Chargement de votre liste...</p>
+                    <p className="animate-pulse font-medium text-muted-foreground">
+                        Chargement de votre liste...
+                    </p>
                 </div>
             </div>
         );
@@ -311,7 +339,9 @@ const ShoppingList: React.FC = () => {
                 </div>
                 <div>
                     <h1 className="text-h1 text-foreground">Liste de courses</h1>
-                    <p className="text-body text-muted-foreground">{pendingItems.length} articles restants</p>
+                    <p className="text-body text-muted-foreground">
+                        {pendingItems.length} articles restants
+                    </p>
                 </div>
             </div>
 
@@ -326,15 +356,21 @@ const ShoppingList: React.FC = () => {
                                 label="Nom"
                                 type="text"
                                 value={newItem.name}
-                                onChange={(e) => setNewItem((prev) => ({ ...prev, name: e.target.value }))}
+                                onChange={(e) =>
+                                    setNewItem((prev) => ({ ...prev, name: e.target.value }))
+                                }
                                 placeholder="Ex: Lait, Pain"
                             />
                         </div>
                         <div className="md:col-span-2">
-                            <label className="mb-1.5 block text-caption font-medium text-foreground">Categorie</label>
+                            <label className="mb-1.5 block text-caption font-medium text-foreground">
+                                Categorie
+                            </label>
                             <select
                                 value={newItem.category}
-                                onChange={(e) => setNewItem((prev) => ({ ...prev, category: e.target.value }))}
+                                onChange={(e) =>
+                                    setNewItem((prev) => ({ ...prev, category: e.target.value }))
+                                }
                                 className="input-nexus py-0 text-caption"
                             >
                                 {categories.map((category) => (
@@ -351,7 +387,9 @@ const ShoppingList: React.FC = () => {
                                 min="0"
                                 step="0.1"
                                 value={newItem.quantity}
-                                onChange={(e) => setNewItem((prev) => ({ ...prev, quantity: e.target.value }))}
+                                onChange={(e) =>
+                                    setNewItem((prev) => ({ ...prev, quantity: e.target.value }))
+                                }
                                 placeholder="1"
                             />
                         </div>
@@ -362,7 +400,9 @@ const ShoppingList: React.FC = () => {
                                 min="0"
                                 step="0.01"
                                 value={newItem.price}
-                                onChange={(e) => setNewItem((prev) => ({ ...prev, price: e.target.value }))}
+                                onChange={(e) =>
+                                    setNewItem((prev) => ({ ...prev, price: e.target.value }))
+                                }
                                 placeholder="2.50"
                             />
                         </div>
@@ -392,7 +432,11 @@ const ShoppingList: React.FC = () => {
                             placeholder="Ex: Courses semaine"
                         />
                         <div className="md:col-span-2 flex items-end gap-2">
-                            <Button variant="secondary" className="w-full md:w-auto" onClick={openTemplateDialog}>
+                            <Button
+                                variant="secondary"
+                                className="w-full md:w-auto"
+                                onClick={openTemplateDialog}
+                            >
                                 <Save className="mr-1 h-4 w-4" />
                                 Créer un template
                             </Button>
@@ -401,7 +445,9 @@ const ShoppingList: React.FC = () => {
 
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                         <div className="md:col-span-2">
-                            <label className="mb-1.5 block text-caption font-medium text-foreground">Template existant</label>
+                            <label className="mb-1.5 block text-caption font-medium text-foreground">
+                                Template existant
+                            </label>
                             <select
                                 value={selectedTemplateId}
                                 onChange={(e) => setSelectedTemplateId(e.target.value)}
@@ -419,7 +465,11 @@ const ShoppingList: React.FC = () => {
                             <Button variant="secondary" className="flex-1" onClick={applyTemplate}>
                                 Appliquer
                             </Button>
-                            <Button variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={deleteTemplate}>
+                            <Button
+                                variant="ghost"
+                                className="text-destructive hover:bg-destructive/10"
+                                onClick={deleteTemplate}
+                            >
                                 <Trash2 className="h-4 w-4" />
                             </Button>
                         </div>
@@ -431,8 +481,12 @@ const ShoppingList: React.FC = () => {
                 {pendingItems.length === 0 && completedItems.length === 0 ? (
                     <div className="rounded-card border border-dashed border-border bg-card py-16 text-center">
                         <ShoppingBag className="mx-auto mb-3 h-12 w-12 text-muted-foreground/30" />
-                        <h3 className="text-body font-semibold text-foreground">Votre liste est vide</h3>
-                        <p className="text-caption text-muted-foreground">Ajoutez des articles ou appliquez un template.</p>
+                        <h3 className="text-body font-semibold text-foreground">
+                            Votre liste est vide
+                        </h3>
+                        <p className="text-caption text-muted-foreground">
+                            Ajoutez des articles ou appliquez un template.
+                        </p>
                     </div>
                 ) : (
                     <>
@@ -446,15 +500,29 @@ const ShoppingList: React.FC = () => {
                                     onClick={() => toggleItem(item)}
                                     className="flex h-6 w-6 items-center justify-center rounded-md border-2 border-input"
                                 >
-                                    {item.is_checked ? <Check className="h-3.5 w-3.5 text-primary" /> : null}
+                                    {item.is_checked ? (
+                                        <Check className="h-3.5 w-3.5 text-primary" />
+                                    ) : null}
                                 </button>
 
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-body font-medium text-foreground">{item.name}</p>
+                                    <p className="truncate text-body font-medium text-foreground">
+                                        {item.name}
+                                    </p>
                                     <div className="mt-1 flex flex-wrap items-center gap-2 text-micro">
-                                        <span className="rounded-pill bg-primary-soft px-2 py-0.5 text-primary">{item.category}</span>
-                                        {item.quantity ? <span className="text-muted-foreground">Qt: {item.quantity}</span> : null}
-                                        {item.price ? <span className="text-muted-foreground">{formatMoney(item.price)}</span> : null}
+                                        <span className="rounded-pill bg-primary-soft px-2 py-0.5 text-primary">
+                                            {item.category}
+                                        </span>
+                                        {item.quantity ? (
+                                            <span className="text-muted-foreground">
+                                                Qt: {item.quantity}
+                                            </span>
+                                        ) : null}
+                                        {item.price ? (
+                                            <span className="text-muted-foreground">
+                                                {formatMoney(item.price)}
+                                            </span>
+                                        ) : null}
                                     </div>
                                 </div>
 
@@ -472,7 +540,9 @@ const ShoppingList: React.FC = () => {
                         {completedItems.length > 0 ? (
                             <div className="rounded-card border border-dashed border-border bg-muted/20 p-4">
                                 <div className="mb-3 flex items-center justify-between">
-                                    <p className="text-caption font-medium text-muted-foreground">Articles coches ({completedItems.length})</p>
+                                    <p className="text-caption font-medium text-muted-foreground">
+                                        Articles coches ({completedItems.length})
+                                    </p>
                                     <Button variant="ghost" size="sm" onClick={clearCheckedItems}>
                                         Nettoyer
                                     </Button>
@@ -490,7 +560,9 @@ const ShoppingList: React.FC = () => {
                                             >
                                                 <Check className="h-3 w-3 text-white" />
                                             </button>
-                                            <p className="line-through text-caption text-muted-foreground">{item.name}</p>
+                                            <p className="line-through text-caption text-muted-foreground">
+                                                {item.name}
+                                            </p>
                                         </div>
                                     ))}
                                 </div>
@@ -503,7 +575,9 @@ const ShoppingList: React.FC = () => {
             <div className="sticky bottom-20 z-20 rounded-card border border-border bg-card px-4 py-3 shadow-surface lg:bottom-4">
                 <div className="flex items-center justify-between text-caption">
                     <span className="text-muted-foreground">Total estime</span>
-                    <span className="text-body font-semibold text-foreground">{formatMoney(totalPrice)}</span>
+                    <span className="text-body font-semibold text-foreground">
+                        {formatMoney(totalPrice)}
+                    </span>
                 </div>
             </div>
 
@@ -531,7 +605,9 @@ const ShoppingList: React.FC = () => {
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => setSelectedItemIds(new Set(items.map((i) => i.id)))}
+                                    onClick={() =>
+                                        setSelectedItemIds(new Set(items.map((i) => i.id)))
+                                    }
                                 >
                                     Tout sélectionner
                                 </Button>
@@ -547,9 +623,13 @@ const ShoppingList: React.FC = () => {
                         </div>
                         <div className="max-h-72 overflow-y-auto space-y-3 rounded-input border border-border p-3">
                             {categories.map((category) => {
-                                const categoryItems = items.filter((item) => item.category === category);
+                                const categoryItems = items.filter(
+                                    (item) => item.category === category,
+                                );
                                 if (categoryItems.length === 0) return null;
-                                const allSelected = categoryItems.every((item) => selectedItemIds.has(item.id));
+                                const allSelected = categoryItems.every((item) =>
+                                    selectedItemIds.has(item.id),
+                                );
                                 return (
                                     <div key={category}>
                                         <div className="flex items-center justify-between mb-1">
@@ -558,10 +638,16 @@ const ShoppingList: React.FC = () => {
                                             </span>
                                             <button
                                                 type="button"
-                                                onClick={() => allSelected ? deselectByCategory(category) : selectByCategory(category)}
+                                                onClick={() =>
+                                                    allSelected
+                                                        ? deselectByCategory(category)
+                                                        : selectByCategory(category)
+                                                }
                                                 className="text-micro text-primary underline hover:no-underline"
                                             >
-                                                {allSelected ? 'Désélectionner' : 'Tout sélectionner'}
+                                                {allSelected
+                                                    ? 'Désélectionner'
+                                                    : 'Tout sélectionner'}
                                             </button>
                                         </div>
                                         <div className="space-y-1 pl-1">
@@ -573,12 +659,18 @@ const ShoppingList: React.FC = () => {
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedItemIds.has(item.id)}
-                                                        onChange={() => toggleItemSelection(item.id)}
+                                                        onChange={() =>
+                                                            toggleItemSelection(item.id)
+                                                        }
                                                         className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                                                     />
-                                                    <span className={`text-body-sm ${item.is_checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                                                    <span
+                                                        className={`text-body-sm ${item.is_checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                    >
                                                         {item.name}
-                                                        {item.quantity ? ` · ${item.quantity}${item.unit ? ' ' + item.unit : ''}` : ''}
+                                                        {item.quantity
+                                                            ? ` · ${item.quantity}${item.unit ? ' ' + item.unit : ''}`
+                                                            : ''}
                                                     </span>
                                                 </label>
                                             ))}
@@ -589,7 +681,11 @@ const ShoppingList: React.FC = () => {
                         </div>
                     </div>
                     <div className="flex justify-end gap-3 pt-2">
-                        <Button type="button" variant="secondary" onClick={() => setTemplateDialogOpen(false)}>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setTemplateDialogOpen(false)}
+                        >
                             Annuler
                         </Button>
                         <Button type="button" onClick={saveTemplateFromDialog}>

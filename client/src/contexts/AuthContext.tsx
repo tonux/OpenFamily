@@ -13,7 +13,7 @@ interface AuthContextType {
     loading: boolean;
     login: (email: string, password: string) => Promise<void>;
     register: (email: string, password: string, name: string) => Promise<void>;
-    logout: () => void;
+    logout: () => Promise<void>;
     isAuthenticated: boolean;
     setUserCurrency: (currency: string) => Promise<void>;
 }
@@ -21,19 +21,45 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AUTH_EXPIRED_EVENT = 'openfamily:auth-expired';
 
+// We keep a copy of the *user profile* (not the token) in localStorage so the
+// UI can paint immediately on reload before /api/auth/me returns. This is a
+// non-sensitive convenience cache; the source of truth is always the server.
+const USER_CACHE_KEY = 'user';
+
+const readCachedUser = (): User | null => {
+    try {
+        const raw = localStorage.getItem(USER_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && typeof parsed.id === 'string') {
+            return parsed as User;
+        }
+    } catch {
+        // ignore corrupted cache
+    }
+    return null;
+};
+
+const writeCachedUser = (user: User | null): void => {
+    if (user) {
+        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+    } else {
+        localStorage.removeItem(USER_CACHE_KEY);
+    }
+};
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<User | null>(null);
+    // Optimistically paint with the cached profile — `/api/auth/me` will
+    // confirm or clear it shortly.
+    const [user, setUser] = useState<User | null>(readCachedUser());
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         let mounted = true;
 
         const clearSession = () => {
-            api.logout();
-            localStorage.removeItem('user');
-            if (mounted) {
-                setUser(null);
-            }
+            writeCachedUser(null);
+            if (mounted) setUser(null);
         };
 
         const onAuthExpired = () => {
@@ -42,34 +68,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         window.addEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
 
+        // No more "is there a token?" check — there is no readable token. We
+        // simply ask the server who we are. If we have valid cookies, /me
+        // succeeds; if not (or refresh fails), the api client emits
+        // auth-expired and we end up logged out.
         const bootstrapSession = async () => {
-            const token = api.getToken();
-            if (!token) {
-                if (mounted) {
-                    setLoading(false);
-                }
-                return;
-            }
-
             try {
-                const response = await api.get<{ success: boolean; data: { user: User } }>('/api/auth/me');
-                if (!mounted) {
-                    return;
-                }
-
+                const response = await api.get<{ success: boolean; data: { user: User } }>(
+                    '/api/auth/me',
+                );
+                if (!mounted) return;
                 if (response.success && response.data?.user) {
                     setUser(response.data.user);
-                    localStorage.setItem('user', JSON.stringify(response.data.user));
+                    writeCachedUser(response.data.user);
                 } else {
                     clearSession();
                 }
-            } catch (error) {
-                console.error('Failed to restore session:', error);
-                clearSession();
-            } finally {
+            } catch {
+                // Either no session or the server is down. In either case we
+                // don't surface the cached user — the api client has already
+                // dispatched auth-expired if appropriate.
                 if (mounted) {
-                    setLoading(false);
+                    clearSession();
                 }
+            } finally {
+                if (mounted) setLoading(false);
             }
         };
 
@@ -85,8 +108,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const response = await api.login(email, password);
         if (response.success && response.user) {
             setUser(response.user);
-            // Also store in localStorage for persistence
-            localStorage.setItem('user', JSON.stringify(response.user));
+            writeCachedUser(response.user);
         }
     };
 
@@ -94,25 +116,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const response = await api.register(email, password, name);
         if (response.success && response.user) {
             setUser(response.user);
-            // Also store in localStorage for persistence
-            localStorage.setItem('user', JSON.stringify(response.user));
+            writeCachedUser(response.user);
         }
     };
 
-    const logout = () => {
-        api.logout();
+    const logout = async () => {
+        await api.logout();
         setUser(null);
-        localStorage.removeItem('user');
+        writeCachedUser(null);
     };
 
     const setUserCurrency = async (currency: string) => {
         const response = await api.patch<{ success: boolean; data: { user: User } }>(
             '/api/auth/me/currency',
-            { currency }
+            { currency },
         );
         if (response.success && response.data?.user) {
             setUser(response.data.user);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
+            writeCachedUser(response.data.user);
         }
     };
 

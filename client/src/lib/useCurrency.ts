@@ -14,8 +14,9 @@ export function useCurrency() {
     const definition = useMemo(() => getCurrencyDefinition(code), [code]);
 
     const format = useCallback(
-        (amount: number, options?: Intl.NumberFormatOptions) => formatCurrency(amount, code, options),
-        [code]
+        (amount: number, options?: Intl.NumberFormatOptions) =>
+            formatCurrency(amount, code, options),
+        [code],
     );
 
     return {

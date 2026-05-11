@@ -1,20 +1,42 @@
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import { query } from '../db';
-import { authMiddleware, AuthRequest, generateToken } from '../middleware/auth';
+import {
+    authMiddleware,
+    AuthRequest,
+    setAuthCookies,
+    clearAuthCookies,
+    extractRefreshToken,
+    verifyToken,
+} from '../middleware/auth';
 import { normalizeEmail } from '../lib/normalize';
 
 // Must stay in sync with shared/src/constants.ts SUPPORTED_CURRENCIES.
 const SUPPORTED_CURRENCY_CODES = new Set([
-    'EUR', 'USD', 'GBP', 'CHF', 'CAD', 'JPY', 'CNY', 'AUD',
-    'XOF', 'XAF', 'MAD', 'TND', 'DZD', 'BRL', 'INR',
+    'EUR',
+    'USD',
+    'GBP',
+    'CHF',
+    'CAD',
+    'JPY',
+    'CNY',
+    'AUD',
+    'XOF',
+    'XAF',
+    'MAD',
+    'TND',
+    'DZD',
+    'BRL',
+    'INR',
 ]);
 
 const router = Router();
 
 router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
     try {
-        const result = await query('SELECT id, email, name, currency FROM users WHERE id = $1', [req.userId]);
+        const result = await query('SELECT id, email, name, currency FROM users WHERE id = $1', [
+            req.userId,
+        ]);
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
@@ -36,7 +58,7 @@ router.patch('/me/currency', authMiddleware, async (req: AuthRequest, res) => {
 
         const result = await query(
             'UPDATE users SET currency = $1 WHERE id = $2 RETURNING id, email, name, currency',
-            [currency, req.userId]
+            [currency, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -66,11 +88,15 @@ router.post('/register', async (req, res) => {
         }
 
         if (password.length < 8) {
-            return res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
+            return res
+                .status(400)
+                .json({ success: false, error: 'Password must be at least 8 characters' });
         }
 
         // Check if user exists
-        const existingUser = await query('SELECT id FROM users WHERE LOWER(email) = $1', [normalizedEmail]);
+        const existingUser = await query('SELECT id FROM users WHERE LOWER(email) = $1', [
+            normalizedEmail,
+        ]);
         if (existingUser.rows.length > 0) {
             return res.status(400).json({ success: false, error: 'User already exists' });
         }
@@ -81,13 +107,16 @@ router.post('/register', async (req, res) => {
         // Create user. `currency` is left NULL so the client prompts the user to pick one on first login.
         const result = await query(
             'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, currency',
-            [normalizedEmail, password_hash, cleanedName]
+            [normalizedEmail, password_hash, cleanedName],
         );
 
         const user = result.rows[0];
-        const token = generateToken(user.id);
+        setAuthCookies(res, user.id);
 
-        res.json({ success: true, data: { user, token } });
+        // We intentionally do NOT return the JWT in the body anymore — the
+        // tokens live in httpOnly cookies so they can never be exfiltrated by
+        // JavaScript (XSS). The client gets only non-sensitive user info.
+        res.json({ success: true, data: { user } });
     } catch (error) {
         console.error('Register error:', error);
         res.status(500).json({ success: false, error: 'Internal server error' });
@@ -105,7 +134,9 @@ router.post('/login', async (req, res) => {
         }
 
         // Find user
-        const result = await query('SELECT * FROM users WHERE LOWER(email) = $1', [normalizedEmail]);
+        const result = await query('SELECT * FROM users WHERE LOWER(email) = $1', [
+            normalizedEmail,
+        ]);
         if (result.rows.length === 0) {
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
@@ -119,19 +150,58 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
-        const token = generateToken(user.id);
+        setAuthCookies(res, user.id);
 
         res.json({
             success: true,
             data: {
-                user: { id: user.id, email: user.email, name: user.name, currency: user.currency ?? null },
-                token
-            }
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    currency: user.currency ?? null,
+                },
+            },
         });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
+});
+
+// Issue a fresh access (and refresh) token from a valid refresh cookie.
+// Returns 401 if the refresh cookie is missing, invalid, expired, or has the
+// wrong `kind` — the client should then send the user back to login.
+router.post('/refresh', async (req, res) => {
+    try {
+        const token = extractRefreshToken(req);
+        if (!token) {
+            return res.status(401).json({ success: false, error: 'No refresh token' });
+        }
+
+        const payload = verifyToken(token, 'refresh');
+        // Confirm the user still exists before rotating the session — covers
+        // the case where the account was deleted while a refresh token was
+        // still in circulation.
+        const result = await query('SELECT id FROM users WHERE id = $1', [payload.userId]);
+        if (result.rows.length === 0) {
+            clearAuthCookies(res);
+            return res.status(401).json({ success: false, error: 'User no longer exists' });
+        }
+
+        setAuthCookies(res, payload.userId);
+        res.json({ success: true });
+    } catch {
+        clearAuthCookies(res);
+        return res.status(401).json({ success: false, error: 'Invalid refresh token' });
+    }
+});
+
+// Clear auth cookies. Always returns 200 — logout should be idempotent and
+// safe to call even when the user has no session.
+router.post('/logout', (_req, res) => {
+    clearAuthCookies(res);
+    res.json({ success: true });
 });
 
 export default router;

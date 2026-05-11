@@ -10,7 +10,7 @@ export function formatDate(date: Date | string): string {
     return d.toLocaleDateString('fr-FR', {
         year: 'numeric',
         month: 'long',
-        day: 'numeric'
+        day: 'numeric',
     });
 }
 
@@ -18,7 +18,7 @@ export function formatTime(date: Date | string): string {
     const d = typeof date === 'string' ? new Date(date) : date;
     return d.toLocaleTimeString('fr-FR', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
     });
 }
 
@@ -27,7 +27,7 @@ import { getCurrencyDefinition } from './currencies';
 export function formatCurrency(
     amount: number,
     currencyCode?: string | null,
-    options?: Intl.NumberFormatOptions
+    options?: Intl.NumberFormatOptions,
 ): string {
     const def = getCurrencyDefinition(currencyCode);
     return new Intl.NumberFormat(def.locale, {

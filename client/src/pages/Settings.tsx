@@ -45,7 +45,10 @@ const Settings: React.FC = () => {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [currencyDraft, setCurrencyDraft] = useState<string>(user?.currency ?? DEFAULT_CURRENCY);
     const [currencySaving, setCurrencySaving] = useState(false);
-    const [currencyMessage, setCurrencyMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+    const [currencyMessage, setCurrencyMessage] = useState<{
+        kind: 'success' | 'error';
+        text: string;
+    } | null>(null);
 
     const currentCurrency = user?.currency ?? null;
     const currencyDirty = currencyDraft !== currentCurrency;
@@ -81,7 +84,7 @@ const Settings: React.FC = () => {
             a.click();
             URL.revokeObjectURL(url);
         } catch (error) {
-            setExportError(error instanceof Error ? error.message : 'Erreur lors de l\'export.');
+            setExportError(error instanceof Error ? error.message : "Erreur lors de l'export.");
         } finally {
             setExportLoading(false);
         }
@@ -108,7 +111,7 @@ const Settings: React.FC = () => {
 
             const response = await api.post<{ success: boolean; data: { imported: ImportCounts } }>(
                 '/api/data/import',
-                data
+                data,
             );
             if (response.success) {
                 setImportSuccess(response.data.imported);
@@ -119,7 +122,7 @@ const Settings: React.FC = () => {
             if (error instanceof SyntaxError) {
                 setImportError('Fichier JSON invalide.');
             } else {
-                setImportError(error instanceof Error ? error.message : 'Erreur lors de l\'import.');
+                setImportError(error instanceof Error ? error.message : "Erreur lors de l'import.");
             }
         } finally {
             setImportLoading(false);
@@ -130,7 +133,9 @@ const Settings: React.FC = () => {
         <div className="space-y-6">
             <div>
                 <h2 className="text-title font-bold text-foreground">Paramètres</h2>
-                <p className="text-caption text-muted-foreground">Gérez vos données et préférences.</p>
+                <p className="text-caption text-muted-foreground">
+                    Gérez vos données et préférences.
+                </p>
             </div>
 
             {/* Currency */}
@@ -143,8 +148,9 @@ const Settings: React.FC = () => {
                         <div className="flex-1">
                             <h3 className="text-caption font-semibold text-foreground">Devise</h3>
                             <p className="mt-1 text-micro text-muted-foreground">
-                                Devise utilisée pour afficher les montants (budget, courses, dashboard). Les
-                                montants déjà saisis ne sont pas convertis lors d'un changement.
+                                Devise utilisée pour afficher les montants (budget, courses,
+                                dashboard). Les montants déjà saisis ne sont pas convertis lors d'un
+                                changement.
                             </p>
                             <div className="mt-4 max-w-sm">
                                 <Select
@@ -156,7 +162,9 @@ const Settings: React.FC = () => {
                             {currencyMessage && (
                                 <p
                                     className={`mt-2 flex items-center gap-1 text-micro ${
-                                        currencyMessage.kind === 'error' ? 'text-destructive' : 'text-emerald-600'
+                                        currencyMessage.kind === 'error'
+                                            ? 'text-destructive'
+                                            : 'text-emerald-600'
                                     }`}
                                 >
                                     {currencyMessage.kind === 'error' ? (
@@ -172,7 +180,9 @@ const Settings: React.FC = () => {
                                 onClick={handleSaveCurrency}
                                 disabled={!currencyDirty || currencySaving}
                             >
-                                {currencySaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {currencySaving && (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                )}
                                 Enregistrer
                             </Button>
                         </div>
@@ -188,10 +198,12 @@ const Settings: React.FC = () => {
                             <Download className="h-5 w-5" />
                         </div>
                         <div className="flex-1">
-                            <h3 className="text-caption font-semibold text-foreground">Exporter les données</h3>
+                            <h3 className="text-caption font-semibold text-foreground">
+                                Exporter les données
+                            </h3>
                             <p className="mt-1 text-micro text-muted-foreground">
-                                Télécharge toutes vos données (budget, tâches, recettes, membres, courses,
-                                rendez-vous, plannings, repas) dans un fichier JSON.
+                                Télécharge toutes vos données (budget, tâches, recettes, membres,
+                                courses, rendez-vous, plannings, repas) dans un fichier JSON.
                             </p>
                             {exportError && (
                                 <p className="mt-2 flex items-center gap-1 text-micro text-destructive">
@@ -224,10 +236,12 @@ const Settings: React.FC = () => {
                             <Upload className="h-5 w-5" />
                         </div>
                         <div className="flex-1">
-                            <h3 className="text-caption font-semibold text-foreground">Importer des données</h3>
+                            <h3 className="text-caption font-semibold text-foreground">
+                                Importer des données
+                            </h3>
                             <p className="mt-1 text-micro text-muted-foreground">
-                                Restaure des données depuis un fichier d'export OpenFamily. Les données
-                                existantes ne sont pas écrasées (doublons ignorés).
+                                Restaure des données depuis un fichier d'export OpenFamily. Les
+                                données existantes ne sont pas écrasées (doublons ignorés).
                             </p>
 
                             {importSuccess && (
@@ -239,7 +253,11 @@ const Settings: React.FC = () => {
                                     <ul className="space-y-0.5 text-micro text-muted-foreground">
                                         {Object.entries(importSuccess).map(([key, count]) => (
                                             <li key={key}>
-                                                {ENTITY_LABELS[key] ?? key} : <span className="font-medium text-foreground">{count}</span> élément(s) importé(s)
+                                                {ENTITY_LABELS[key] ?? key} :{' '}
+                                                <span className="font-medium text-foreground">
+                                                    {count}
+                                                </span>{' '}
+                                                élément(s) importé(s)
                                             </li>
                                         ))}
                                     </ul>

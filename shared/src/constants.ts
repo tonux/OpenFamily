@@ -7,7 +7,7 @@ export const SHOPPING_CATEGORIES = {
     OTHER: 'Autre',
 } as const;
 
-export type ShoppingCategory = typeof SHOPPING_CATEGORIES[keyof typeof SHOPPING_CATEGORIES];
+export type ShoppingCategory = (typeof SHOPPING_CATEGORIES)[keyof typeof SHOPPING_CATEGORIES];
 
 // Recipe Categories
 export const RECIPE_CATEGORIES = {
@@ -17,7 +17,7 @@ export const RECIPE_CATEGORIES = {
     SNACK: 'Snack',
 } as const;
 
-export type RecipeCategory = typeof RECIPE_CATEGORIES[keyof typeof RECIPE_CATEGORIES];
+export type RecipeCategory = (typeof RECIPE_CATEGORIES)[keyof typeof RECIPE_CATEGORIES];
 
 // Budget Categories
 export const BUDGET_CATEGORIES = {
@@ -29,7 +29,7 @@ export const BUDGET_CATEGORIES = {
     OTHER: 'Autre',
 } as const;
 
-export type BudgetCategory = typeof BUDGET_CATEGORIES[keyof typeof BUDGET_CATEGORIES];
+export type BudgetCategory = (typeof BUDGET_CATEGORIES)[keyof typeof BUDGET_CATEGORIES];
 
 // Meal Types
 export const MEAL_TYPES = {
@@ -39,7 +39,7 @@ export const MEAL_TYPES = {
     SNACK: 'Snack',
 } as const;
 
-export type MealType = typeof MEAL_TYPES[keyof typeof MEAL_TYPES];
+export type MealType = (typeof MEAL_TYPES)[keyof typeof MEAL_TYPES];
 
 // Task Frequencies
 export const TASK_FREQUENCIES = {
@@ -50,7 +50,7 @@ export const TASK_FREQUENCIES = {
     ONCE: 'Une fois',
 } as const;
 
-export type TaskFrequency = typeof TASK_FREQUENCIES[keyof typeof TASK_FREQUENCIES];
+export type TaskFrequency = (typeof TASK_FREQUENCIES)[keyof typeof TASK_FREQUENCIES];
 
 // Days of Week
 export const DAYS_OF_WEEK = {
@@ -63,7 +63,7 @@ export const DAYS_OF_WEEK = {
     SUNDAY: 'Dimanche',
 } as const;
 
-export type DayOfWeek = typeof DAYS_OF_WEEK[keyof typeof DAYS_OF_WEEK];
+export type DayOfWeek = (typeof DAYS_OF_WEEK)[keyof typeof DAYS_OF_WEEK];
 
 // Recipe Difficulty
 export const RECIPE_DIFFICULTY = {
@@ -72,7 +72,7 @@ export const RECIPE_DIFFICULTY = {
     HARD: 'Difficile',
 } as const;
 
-export type RecipeDifficulty = typeof RECIPE_DIFFICULTY[keyof typeof RECIPE_DIFFICULTY];
+export type RecipeDifficulty = (typeof RECIPE_DIFFICULTY)[keyof typeof RECIPE_DIFFICULTY];
 
 // Task Priority
 export const TASK_PRIORITY = {
@@ -81,12 +81,12 @@ export const TASK_PRIORITY = {
     HIGH: 'Haute',
 } as const;
 
-export type TaskPriority = typeof TASK_PRIORITY[keyof typeof TASK_PRIORITY];
+export type TaskPriority = (typeof TASK_PRIORITY)[keyof typeof TASK_PRIORITY];
 
 // Blood Types
 export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
 
-export type BloodType = typeof BLOOD_TYPES[number];
+export type BloodType = (typeof BLOOD_TYPES)[number];
 
 // Supported currencies for monetary amounts.
 // `locale` is used for Intl.NumberFormat; `symbol` is informational.
@@ -117,6 +117,6 @@ export const SUPPORTED_CURRENCIES: readonly CurrencyDefinition[] = [
 
 export const SUPPORTED_CURRENCY_CODES = SUPPORTED_CURRENCIES.map((c) => c.code);
 
-export type CurrencyCode = typeof SUPPORTED_CURRENCIES[number]['code'];
+export type CurrencyCode = (typeof SUPPORTED_CURRENCIES)[number]['code'];
 
 export const DEFAULT_CURRENCY: CurrencyCode = 'EUR';
