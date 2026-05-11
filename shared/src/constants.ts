@@ -37,9 +37,19 @@ export const MEAL_TYPES = {
     LUNCH: 'Déjeuner',
     DINNER: 'Dîner',
     SNACK: 'Snack',
+    LUNCHBOX: 'Boîte à lunch',
 } as const;
 
 export type MealType = (typeof MEAL_TYPES)[keyof typeof MEAL_TYPES];
+
+// Lunchbox-specific: structured components a parent prepares per kid per day.
+// Stored as JSONB on meal_plans.lunchbox_items when meal_type = LUNCHBOX.
+export interface LunchboxItems {
+    main?: string; // sandwich, plat principal
+    fruit?: string; // fruit/légume
+    snack?: string; // collation, biscuit
+    drink?: string; // boisson
+}
 
 // Task Frequencies
 export const TASK_FREQUENCIES = {
