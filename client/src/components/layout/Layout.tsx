@@ -1,5 +1,6 @@
 import React, { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -27,37 +28,40 @@ interface LayoutProps {
     children: ReactNode;
 }
 
+// Navigation and quick-action lists are now keyed against the i18n catalogue.
+// `labelKey` is resolved with t() at render time so changing language updates
+// the menu live, without re-renders of these constants.
 const navigation = [
-    { name: 'Aujourd\'hui', href: '/', icon: Home },
-    { name: 'Courses', href: '/shopping', icon: ShoppingCart },
-    { name: 'Taches', href: '/tasks', icon: CheckSquare },
-    { name: 'Rendez-vous', href: '/calendar', icon: CalendarIcon },
-    { name: 'Planning', href: '/planning', icon: CalendarDays },
-    { name: 'Recettes', href: '/recipes', icon: ChefHat },
-    { name: 'Repas', href: '/meal-planning', icon: UtensilsCrossed },
-    { name: 'Budget', href: '/budget', icon: Wallet },
-    { name: 'Famille', href: '/family', icon: Users },
-    { name: 'Paramètres', href: '/settings', icon: Settings },
-];
+    { labelKey: 'nav.today', href: '/', icon: Home },
+    { labelKey: 'nav.shopping', href: '/shopping', icon: ShoppingCart },
+    { labelKey: 'nav.tasks', href: '/tasks', icon: CheckSquare },
+    { labelKey: 'nav.appointments', href: '/calendar', icon: CalendarIcon },
+    { labelKey: 'nav.planning', href: '/planning', icon: CalendarDays },
+    { labelKey: 'nav.recipes', href: '/recipes', icon: ChefHat },
+    { labelKey: 'nav.meals', href: '/meal-planning', icon: UtensilsCrossed },
+    { labelKey: 'nav.budget', href: '/budget', icon: Wallet },
+    { labelKey: 'nav.family', href: '/family', icon: Users },
+    { labelKey: 'nav.settings', href: '/settings', icon: Settings },
+] as const;
 
 const mobileTabs = [
-    { name: 'Home', href: '/', icon: Home },
-    { name: 'Planning', href: '/planning', icon: CalendarDays },
-    { name: 'Listes', href: '/shopping', icon: ShoppingCart },
-    { name: 'Budget', href: '/budget', icon: Wallet },
-    { name: 'Famille', href: '/family', icon: Users },
-];
+    { labelKey: 'nav.mobile.home', href: '/', icon: Home },
+    { labelKey: 'nav.mobile.planning', href: '/planning', icon: CalendarDays },
+    { labelKey: 'nav.mobile.lists', href: '/shopping', icon: ShoppingCart },
+    { labelKey: 'nav.mobile.budget', href: '/budget', icon: Wallet },
+    { labelKey: 'nav.mobile.family', href: '/family', icon: Users },
+] as const;
 
 const quickActions = [
-    { name: 'Ajouter une course', href: '/shopping', icon: ShoppingCart },
-    { name: 'Ajouter une tache', href: '/tasks', icon: CheckSquare },
-    { name: 'Ajouter un rendez-vous', href: '/calendar', icon: CalendarIcon },
-    { name: 'Ajouter un horaire', href: '/planning', icon: CalendarDays },
-    { name: 'Ajouter une recette', href: '/recipes', icon: ChefHat },
-    { name: 'Ajouter un repas', href: '/meal-planning', icon: UtensilsCrossed },
-    { name: 'Ajouter une depense', href: '/budget', icon: Wallet },
-    { name: 'Ajouter un membre', href: '/family', icon: Users },
-];
+    { labelKey: 'quick_actions.add_shopping', href: '/shopping', icon: ShoppingCart },
+    { labelKey: 'quick_actions.add_task', href: '/tasks', icon: CheckSquare },
+    { labelKey: 'quick_actions.add_appointment', href: '/calendar', icon: CalendarIcon },
+    { labelKey: 'quick_actions.add_schedule', href: '/planning', icon: CalendarDays },
+    { labelKey: 'quick_actions.add_recipe', href: '/recipes', icon: ChefHat },
+    { labelKey: 'quick_actions.add_meal', href: '/meal-planning', icon: UtensilsCrossed },
+    { labelKey: 'quick_actions.add_expense', href: '/budget', icon: Wallet },
+    { labelKey: 'quick_actions.add_member', href: '/family', icon: Users },
+] as const;
 
 const isRouteActive = (pathname: string, href: string) => {
     if (href === '/') {
@@ -70,6 +74,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const location = useLocation();
     const { user, logout } = useAuth();
     const { setTheme, actualTheme } = useTheme();
+    const { t } = useTranslation();
     const [sidebarOpen, setSidebarOpen] = React.useState(false);
     const [quickActionsOpen, setQuickActionsOpen] = React.useState(false);
 
@@ -97,7 +102,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 className={cn(
                     'fixed left-0 top-0 z-50 h-full w-72 border-r border-border bg-card shadow-surface',
                     'transform transition-transform duration-base ease-soft lg:translate-x-0',
-                    sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+                    sidebarOpen ? 'translate-x-0' : '-translate-x-full',
                 )}
             >
                 <div className="flex h-full flex-col">
@@ -123,7 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                             const active = isRouteActive(location.pathname, item.href);
                             return (
                                 <Link
-                                    key={item.name}
+                                    key={item.labelKey}
                                     to={item.href}
                                     onClick={closeMenus}
                                     className={cn(
@@ -131,16 +136,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                                         'transition-colors duration-fast ease-soft',
                                         active
                                             ? 'bg-primary-soft text-primary'
-                                            : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
+                                            : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
                                     )}
                                 >
                                     <Icon
                                         className={cn(
                                             'h-5 w-5 transition-transform duration-fast ease-soft group-hover:scale-105',
-                                            active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+                                            active
+                                                ? 'text-primary'
+                                                : 'text-muted-foreground group-hover:text-foreground',
                                         )}
                                     />
-                                    <span>{item.name}</span>
+                                    <span>{t(item.labelKey)}</span>
                                 </Link>
                             );
                         })}
@@ -152,8 +159,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                                 {user?.name?.charAt(0) || 'U'}
                             </div>
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-caption font-semibold text-foreground">{user?.name}</p>
-                                <p className="truncate text-micro text-muted-foreground">{user?.email}</p>
+                                <p className="truncate text-caption font-semibold text-foreground">
+                                    {user?.name}
+                                </p>
+                                <p className="truncate text-micro text-muted-foreground">
+                                    {user?.email}
+                                </p>
                             </div>
                         </div>
                         <div className="flex gap-2">
@@ -200,9 +211,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                                 <Menu className="h-5 w-5" />
                             </button>
                             <div>
-                                <p className="text-micro uppercase tracking-[0.12em] text-muted-foreground">OpenFamily</p>
+                                <p className="text-micro uppercase tracking-[0.12em] text-muted-foreground">
+                                    OpenFamily
+                                </p>
                                 <h1 className="text-caption font-semibold text-foreground">
-                                    {currentPage?.name || 'Tableau de bord'}
+                                    {currentPage ? t(currentPage.labelKey) : t('nav.today')}
                                 </h1>
                             </div>
                         </div>
@@ -256,22 +269,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     'transition-all duration-base ease-soft lg:hidden',
                     quickActionsOpen
                         ? 'pointer-events-auto translate-y-0 opacity-100'
-                        : 'pointer-events-none translate-y-3 opacity-0'
+                        : 'pointer-events-none translate-y-3 opacity-0',
                 )}
             >
-                <p className="mb-3 text-caption font-semibold text-foreground">Actions rapides</p>
+                <p className="mb-3 text-caption font-semibold text-foreground">
+                    {t('quick_actions.open')}
+                </p>
                 <div className="grid grid-cols-1 gap-2">
                     {quickActions.map((action) => {
                         const Icon = action.icon;
                         return (
                             <Link
-                                key={action.name}
+                                key={action.labelKey}
                                 to={action.href}
                                 onClick={closeMenus}
                                 className="flex items-center gap-2 rounded-input px-3 py-2 text-caption text-foreground hover:bg-surface-2"
                             >
                                 <Icon className="h-4 w-4 text-primary" />
-                                <span>{action.name}</span>
+                                <span>{t(action.labelKey)}</span>
                             </Link>
                         );
                     })}
@@ -285,17 +300,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         const active = isRouteActive(location.pathname, item.href);
                         return (
                             <Link
-                                key={item.name}
+                                key={item.labelKey}
                                 to={item.href}
                                 className={cn(
                                     'flex flex-col items-center justify-center gap-1 rounded-input px-2 py-2 text-micro font-medium',
                                     active
                                         ? 'bg-primary-soft text-primary'
-                                        : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground'
+                                        : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
                                 )}
                             >
                                 <Icon className="h-4 w-4" />
-                                <span>{item.name}</span>
+                                <span>{t(item.labelKey)}</span>
                             </Link>
                         );
                     })}

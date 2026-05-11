@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { toNullIfEmpty, toOptionalNumber } from '../lib/normalize';
+import logger from '../lib/logger';
 
 const router = Router();
 router.use(authMiddleware);
@@ -66,7 +67,9 @@ router.get('/entries', async (req: AuthRequest, res) => {
         const result = await query(queryText, params);
         res.json({ success: true, data: result.rows.map(mapBudgetEntry) });
     } catch (error) {
-        console.error('Get budget entries error:', error);
+        logger.error('budget.get_budget_entries_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -78,25 +81,38 @@ router.post('/entries', async (req: AuthRequest, res) => {
         const parsedAmount = toOptionalNumber(amount);
 
         if (!category || parsedAmount === null || !date) {
-            return res.status(400).json({ success: false, error: 'category, amount and date are required' });
+            return res
+                .status(400)
+                .json({ success: false, error: 'category, amount and date are required' });
         }
 
         const result = await query(
             `INSERT INTO budget_entries (user_id, category, amount, description, date, is_expense, assigned_to)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [req.userId, category, parsedAmount, toNullIfEmpty(description), date, Boolean(is_expense), toNullIfEmpty(assigned_to)]
+            [
+                req.userId,
+                category,
+                parsedAmount,
+                toNullIfEmpty(description),
+                date,
+                Boolean(is_expense),
+                toNullIfEmpty(assigned_to),
+            ],
         );
 
         // Re-fetch with JOIN to get member name/color
         const full = await query(
             `SELECT be.*, fm.name as assigned_to_name, fm.color as assigned_to_color
              FROM budget_entries be LEFT JOIN family_members fm ON be.assigned_to = fm.id
-             WHERE be.id = $1`, [result.rows[0].id]
+             WHERE be.id = $1`,
+            [result.rows[0].id],
         );
 
         res.json({ success: true, data: mapBudgetEntry(full.rows[0]) });
     } catch (error) {
-        console.error('Create budget entry error:', error);
+        logger.error('budget.create_budget_entry_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -133,7 +149,7 @@ router.put('/entries/:id', async (req: AuthRequest, res) => {
                 assignedToValue !== undefined ? assignedToValue : null,
                 id,
                 req.userId,
-            ]
+            ],
         );
 
         if (result.rows.length === 0) {
@@ -144,12 +160,15 @@ router.put('/entries/:id', async (req: AuthRequest, res) => {
         const full = await query(
             `SELECT be.*, fm.name as assigned_to_name, fm.color as assigned_to_color
              FROM budget_entries be LEFT JOIN family_members fm ON be.assigned_to = fm.id
-             WHERE be.id = $1`, [id]
+             WHERE be.id = $1`,
+            [id],
         );
 
         res.json({ success: true, data: mapBudgetEntry(full.rows[0]) });
     } catch (error) {
-        console.error('Update budget entry error:', error);
+        logger.error('budget.update_budget_entry_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -161,7 +180,7 @@ router.delete('/entries/:id', async (req: AuthRequest, res) => {
 
         const result = await query(
             'DELETE FROM budget_entries WHERE id = $1 AND user_id = $2 RETURNING id',
-            [id, req.userId]
+            [id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -170,7 +189,9 @@ router.delete('/entries/:id', async (req: AuthRequest, res) => {
 
         res.json({ success: true, message: 'Budget entry deleted' });
     } catch (error) {
-        console.error('Delete budget entry error:', error);
+        logger.error('budget.delete_budget_entry_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -196,7 +217,9 @@ router.get('/limits', async (req: AuthRequest, res) => {
         const result = await query(queryText, params);
         res.json({ success: true, data: result.rows.map(mapBudgetLimit) });
     } catch (error) {
-        console.error('Get budget limits error:', error);
+        logger.error('budget.get_budget_limits_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -210,7 +233,12 @@ router.post('/limits', async (req: AuthRequest, res) => {
         const parsedYear = toOptionalNumber(year);
 
         if (!category || parsedLimit === null || parsedMonth === null || parsedYear === null) {
-            return res.status(400).json({ success: false, error: 'category, monthly_limit, month and year are required' });
+            return res
+                .status(400)
+                .json({
+                    success: false,
+                    error: 'category, monthly_limit, month and year are required',
+                });
         }
 
         const result = await query(
@@ -219,12 +247,14 @@ router.post('/limits', async (req: AuthRequest, res) => {
        ON CONFLICT (user_id, category, month, year)
        DO UPDATE SET monthly_limit = $3
        RETURNING *`,
-            [req.userId, category, parsedLimit, parsedMonth, parsedYear]
+            [req.userId, category, parsedLimit, parsedMonth, parsedYear],
         );
 
         res.json({ success: true, data: mapBudgetLimit(result.rows[0]) });
     } catch (error) {
-        console.error('Set budget limit error:', error);
+        logger.error('budget.set_budget_limit_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -250,7 +280,7 @@ router.get('/statistics', async (req: AuthRequest, res) => {
          AND EXTRACT(MONTH FROM date) = $2
          AND EXTRACT(YEAR FROM date) = $3
        GROUP BY category`,
-            [req.userId, parsedMonth, parsedYear]
+            [req.userId, parsedMonth, parsedYear],
         );
 
         const totals = await query(
@@ -261,7 +291,7 @@ router.get('/statistics', async (req: AuthRequest, res) => {
        WHERE user_id = $1
          AND EXTRACT(MONTH FROM date) = $2
          AND EXTRACT(YEAR FROM date) = $3`,
-            [req.userId, parsedMonth, parsedYear]
+            [req.userId, parsedMonth, parsedYear],
         );
 
         // Per-member spending breakdown by category (for stacked bar chart)
@@ -280,7 +310,7 @@ router.get('/statistics', async (req: AuthRequest, res) => {
          AND EXTRACT(YEAR FROM be.date) = $3
        GROUP BY fm.id, fm.name, fm.color, be.category
        ORDER BY fm.name, be.category`,
-            [req.userId, parsedMonth, parsedYear]
+            [req.userId, parsedMonth, parsedYear],
         );
 
         const totalExpenses = parseFloat(totals.rows[0]?.total_expenses || '0');
@@ -303,10 +333,12 @@ router.get('/statistics', async (req: AuthRequest, res) => {
                     category: row.category,
                     amount: toNumber(row.amount),
                 })),
-            }
+            },
         });
     } catch (error) {
-        console.error('Get budget statistics error:', error);
+        logger.error('budget.get_budget_statistics_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -331,7 +363,7 @@ router.get('/statistics/monthly', async (req: AuthRequest, res) => {
          AND EXTRACT(YEAR FROM date) = $2
        GROUP BY EXTRACT(MONTH FROM date)
        ORDER BY month`,
-            [req.userId, parsedYear]
+            [req.userId, parsedYear],
         );
 
         const monthlyData = Array.from({ length: 12 }, (_, i) => {
@@ -347,7 +379,9 @@ router.get('/statistics/monthly', async (req: AuthRequest, res) => {
 
         res.json({ success: true, data: monthlyData });
     } catch (error) {
-        console.error('Get monthly budget statistics error:', error);
+        logger.error('budget.get_monthly_budget_statistics_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });

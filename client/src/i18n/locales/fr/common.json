@@ -1,0 +1,58 @@
+{
+  "app": {
+    "name": "OpenFamily"
+  },
+  "nav": {
+    "today": "Aujourd'hui",
+    "shopping": "Courses",
+    "tasks": "Tâches",
+    "appointments": "Rendez-vous",
+    "planning": "Planning",
+    "recipes": "Recettes",
+    "meals": "Repas",
+    "budget": "Budget",
+    "family": "Famille",
+    "settings": "Paramètres",
+    "mobile": {
+      "home": "Accueil",
+      "planning": "Planning",
+      "lists": "Listes",
+      "budget": "Budget",
+      "family": "Famille"
+    }
+  },
+  "quick_actions": {
+    "open": "Actions rapides",
+    "close": "Fermer",
+    "add_shopping": "Ajouter une course",
+    "add_task": "Ajouter une tâche",
+    "add_appointment": "Ajouter un rendez-vous",
+    "add_schedule": "Ajouter un horaire",
+    "add_recipe": "Ajouter une recette",
+    "add_meal": "Ajouter un repas",
+    "add_expense": "Ajouter une dépense",
+    "add_member": "Ajouter un membre"
+  },
+  "header": {
+    "toggle_dark": "Activer le thème sombre",
+    "toggle_light": "Activer le thème clair",
+    "logout": "Se déconnecter",
+    "open_menu": "Ouvrir le menu",
+    "close_menu": "Fermer le menu"
+  },
+  "common": {
+    "loading": "Chargement…",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "confirm": "Confirmer",
+    "back": "Retour",
+    "edit": "Modifier",
+    "add": "Ajouter",
+    "search": "Rechercher",
+    "yes": "Oui",
+    "no": "Non",
+    "error": "Une erreur est survenue",
+    "retry": "Réessayer"
+  }
+}

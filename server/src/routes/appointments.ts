@@ -2,16 +2,17 @@ import { Router } from 'express';
 import { query } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { toNullIfEmpty } from '../lib/normalize';
+import logger from '../lib/logger';
 
 const router = Router();
 router.use(authMiddleware);
 
 const ensureMembersBelongToUser = async (memberIds: string[], userId: string) => {
     for (const memberId of memberIds) {
-        const member = await query(
-            'SELECT id FROM family_members WHERE id = $1 AND user_id = $2',
-            [memberId, userId]
-        );
+        const member = await query('SELECT id FROM family_members WHERE id = $1 AND user_id = $2', [
+            memberId,
+            userId,
+        ]);
         if (member.rows.length === 0) {
             throw new Error('INVALID_MEMBER');
         }
@@ -22,11 +23,13 @@ const enrichAppointmentsWithMembers = async (appointments: any[], userId: string
     if (appointments.length === 0) return appointments;
     const membersResult = await query(
         'SELECT id, name, color FROM family_members WHERE user_id = $1',
-        [userId]
+        [userId],
     );
     const membersById = new Map(membersResult.rows.map((m: any) => [m.id, m]));
     return appointments.map((apt) => {
-        const familyMemberIds: string[] = Array.isArray(apt.family_member_ids) ? apt.family_member_ids : [];
+        const familyMemberIds: string[] = Array.isArray(apt.family_member_ids)
+            ? apt.family_member_ids
+            : [];
         return {
             ...apt,
             family_member_ids: familyMemberIds,
@@ -59,7 +62,9 @@ router.get('/', async (req: AuthRequest, res) => {
         const appointments = await enrichAppointmentsWithMembers(result.rows, req.userId!);
         res.json({ success: true, data: appointments });
     } catch (error) {
-        console.error('Get appointments error:', error);
+        logger.error('appointments.get_appointments_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -83,7 +88,9 @@ router.post('/', async (req: AuthRequest, res) => {
         const startTime = toNullIfEmpty(start_time);
 
         if (!cleanedTitle || !startTime) {
-            return res.status(400).json({ success: false, error: 'Title and start_time are required' });
+            return res
+                .status(400)
+                .json({ success: false, error: 'Title and start_time are required' });
         }
 
         const memberIds: string[] = Array.isArray(family_member_ids)
@@ -105,7 +112,7 @@ router.post('/', async (req: AuthRequest, res) => {
                 Boolean(reminder_30min),
                 Boolean(reminder_1hour),
                 toNullIfEmpty(notes),
-            ]
+            ],
         );
 
         const [enriched] = await enrichAppointmentsWithMembers([result.rows[0]], req.userId!);
@@ -115,7 +122,9 @@ router.post('/', async (req: AuthRequest, res) => {
             return res.status(400).json({ success: false, error: 'Family member not found' });
         }
 
-        console.error('Create appointment error:', error);
+        logger.error('appointments.create_appointment_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -159,7 +168,9 @@ router.put('/:id', async (req: AuthRequest, res) => {
         if (start_time !== undefined) {
             const startTime = toNullIfEmpty(start_time);
             if (!startTime) {
-                return res.status(400).json({ success: false, error: 'start_time cannot be empty' });
+                return res
+                    .status(400)
+                    .json({ success: false, error: 'start_time cannot be empty' });
             }
             pushUpdate('start_time', startTime);
         }
@@ -202,7 +213,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
        SET ${updates.join(', ')}
        WHERE id = $${values.length + 1} AND user_id = $${values.length + 2}
        RETURNING *`,
-            [...values, id, req.userId]
+            [...values, id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -216,7 +227,9 @@ router.put('/:id', async (req: AuthRequest, res) => {
             return res.status(400).json({ success: false, error: 'Family member not found' });
         }
 
-        console.error('Update appointment error:', error);
+        logger.error('appointments.update_appointment_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -228,7 +241,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         const result = await query(
             'DELETE FROM appointments WHERE id = $1 AND user_id = $2 RETURNING id',
-            [id, req.userId]
+            [id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -237,7 +250,9 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         res.json({ success: true, message: 'Appointment deleted' });
     } catch (error) {
-        console.error('Delete appointment error:', error);
+        logger.error('appointments.delete_appointment_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });

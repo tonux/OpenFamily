@@ -1,4 +1,6 @@
+import path from 'path';
 import { Pool, types } from 'pg';
+import { runner } from 'node-pg-migrate';
 import { loadEnv } from './config/loadEnv';
 import logger from './lib/logger';
 
@@ -78,63 +80,60 @@ export const getClient = async () => {
     return client;
 };
 
-export const runMigrations = async () => {
-    // Keep migrations idempotent so startup works on existing installations.
+// Resolve the migrations folder relative to the compiled output (dist/db.js)
+// or the source (src/db.ts). At runtime __dirname is either:
+//   server/dist  → ../migrations
+//   server/src   → ../migrations  (under tsx)
+// so this single resolution works for both.
+const MIGRATIONS_DIR = path.resolve(__dirname, '..', 'migrations');
+
+/**
+ * Apply all pending database migrations from server/migrations/. Backed by
+ * node-pg-migrate: tracks history in a `pgmigrations` table, runs each
+ * migration exactly once, and applies them inside a transaction so a failure
+ * leaves the database untouched.
+ *
+ * Migration files use the `.sql` format with `-- Up Migration` / `-- Down
+ * Migration` markers. New migrations should be created with:
+ *   npm run db:migrate:create -- <name>
+ * which scaffolds a properly-timestamped file in server/migrations/.
+ */
+export const runMigrations = async (): Promise<void> => {
     logger.info('db.migrations_start');
 
-    const migrations = [
-        "ALTER TABLE family_members ADD COLUMN IF NOT EXISTS role VARCHAR(50) NOT NULL DEFAULT 'Autre'",
-        'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS medications TEXT',
-        'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS emergency_contact_name TEXT',
-        'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS emergency_contact_phone TEXT',
-        'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS notes TEXT',
-        'UPDATE family_members SET notes = medical_notes WHERE notes IS NULL AND medical_notes IS NOT NULL',
-        'UPDATE family_members SET medications = vaccines WHERE medications IS NULL AND vaccines IS NOT NULL',
-        `CREATE TABLE IF NOT EXISTS schedule_entries (
-            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            family_member_id UUID NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
-            schedule_type VARCHAR(30) NOT NULL DEFAULT 'work',
-            title VARCHAR(255) NOT NULL,
-            day_of_week INTEGER NOT NULL CHECK (day_of_week >= 1 AND day_of_week <= 7),
-            start_time TIME NOT NULL,
-            end_time TIME NOT NULL,
-            specific_date DATE,
-            location TEXT,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`,
-        'CREATE INDEX IF NOT EXISTS idx_schedule_entries_user_day ON schedule_entries(user_id, day_of_week)',
-        'CREATE INDEX IF NOT EXISTS idx_schedule_entries_member ON schedule_entries(family_member_id)',
-        'ALTER TABLE budget_entries ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES family_members(id) ON DELETE SET NULL',
-        'CREATE INDEX IF NOT EXISTS idx_budget_entries_assigned_to ON budget_entries(assigned_to)',
-        `DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_trigger WHERE tgname = 'update_schedule_entries_updated_at'
-            ) THEN
-                CREATE TRIGGER update_schedule_entries_updated_at
-                BEFORE UPDATE ON schedule_entries
-                FOR EACH ROW
-                EXECUTE FUNCTION update_updated_at_column();
-            END IF;
-        END
-        $$`,
-        // Issue #43: fix for existing installations – drop constraint preventing cross-midnight schedules,
-        // add missing columns (specific_date, location) used by the planning routes.
-        'ALTER TABLE schedule_entries DROP CONSTRAINT IF EXISTS schedule_entries_check',
-        'ALTER TABLE schedule_entries ADD COLUMN IF NOT EXISTS specific_date DATE',
-        'ALTER TABLE schedule_entries ADD COLUMN IF NOT EXISTS location TEXT',
-        // Multi-currency: nullable so existing users are prompted at next login to confirm.
-        'ALTER TABLE users ADD COLUMN IF NOT EXISTS currency VARCHAR(3)',
-    ];
+    try {
+        const ran = await runner({
+            // Reuse the same pool config so we never open a second connection.
+            databaseUrl: {
+                host: process.env.POSTGRES_HOST || 'localhost',
+                port: parseInt(process.env.POSTGRES_PORT || '5432'),
+                database: process.env.POSTGRES_DB || 'openfamily',
+                user: process.env.POSTGRES_USER || 'openfamily',
+                password: process.env.POSTGRES_PASSWORD || 'changeme',
+            },
+            dir: MIGRATIONS_DIR,
+            migrationsTable: 'pgmigrations',
+            direction: 'up',
+            count: Infinity,
+            // SQL migrations use plain pg_sql by default; we set it explicitly
+            // for clarity.
+            migrationsSchema: 'public',
+            verbose: false,
+            // node-pg-migrate writes to console by default. Silence it; we
+            // produce our own structured log line below.
+            log: () => undefined,
+        });
 
-    for (const migration of migrations) {
-        await pool.query(migration);
+        logger.info('db.migrations_complete', {
+            applied: ran.length,
+            names: ran.map((m) => m.name),
+        });
+    } catch (error) {
+        logger.error('db.migrations_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
     }
-
-    logger.info('db.migrations_complete', { count: migrations.length });
 };
 
 export default pool;

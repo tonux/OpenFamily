@@ -2,16 +2,17 @@ import { Router } from 'express';
 import { query } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { toNullIfEmpty } from '../lib/normalize';
+import logger from '../lib/logger';
 
 const router = Router();
 router.use(authMiddleware);
 
 const ensureMembersBelongToUser = async (memberIds: string[], userId: string) => {
     for (const memberId of memberIds) {
-        const member = await query(
-            'SELECT id FROM family_members WHERE id = $1 AND user_id = $2',
-            [memberId, userId]
-        );
+        const member = await query('SELECT id FROM family_members WHERE id = $1 AND user_id = $2', [
+            memberId,
+            userId,
+        ]);
         if (member.rows.length === 0) {
             throw new Error('INVALID_MEMBER');
         }
@@ -22,7 +23,7 @@ const enrichTasksWithMembers = async (tasks: any[], userId: string) => {
     if (tasks.length === 0) return tasks;
     const membersResult = await query(
         'SELECT id, name, color FROM family_members WHERE user_id = $1',
-        [userId]
+        [userId],
     );
     const membersById = new Map(membersResult.rows.map((m: any) => [m.id, m]));
     return tasks.map((task) => {
@@ -40,12 +41,14 @@ router.get('/', async (req: AuthRequest, res) => {
     try {
         const result = await query(
             'SELECT * FROM tasks WHERE user_id = $1 ORDER BY due_date ASC NULLS LAST, created_at DESC',
-            [req.userId]
+            [req.userId],
         );
         const tasks = await enrichTasksWithMembers(result.rows, req.userId!);
         res.json({ success: true, data: tasks });
     } catch (error) {
-        console.error('Get tasks error:', error);
+        logger.error('tasks.get_tasks_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -76,7 +79,7 @@ router.post('/', async (req: AuthRequest, res) => {
                 toNullIfEmpty(frequency),
                 toNullIfEmpty(priority),
                 JSON.stringify(assignedTo),
-            ]
+            ],
         );
 
         const [enriched] = await enrichTasksWithMembers([result.rows[0]], req.userId!);
@@ -86,7 +89,9 @@ router.post('/', async (req: AuthRequest, res) => {
             return res.status(400).json({ success: false, error: 'Assigned member not found' });
         }
 
-        console.error('Create task error:', error);
+        logger.error('tasks.create_task_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -95,7 +100,8 @@ router.post('/', async (req: AuthRequest, res) => {
 router.put('/:id', async (req: AuthRequest, res) => {
     try {
         const { id } = req.params;
-        const { title, description, is_completed, due_date, frequency, priority, assigned_to } = req.body;
+        const { title, description, is_completed, due_date, frequency, priority, assigned_to } =
+            req.body;
 
         const updates: string[] = [];
         const values: any[] = [];
@@ -153,7 +159,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
        SET ${updates.join(', ')}
        WHERE id = $${values.length + 1} AND user_id = $${values.length + 2}
        RETURNING *`,
-            [...values, id, req.userId]
+            [...values, id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -167,7 +173,9 @@ router.put('/:id', async (req: AuthRequest, res) => {
             return res.status(400).json({ success: false, error: 'Assigned member not found' });
         }
 
-        console.error('Update task error:', error);
+        logger.error('tasks.update_task_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -179,7 +187,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         const result = await query(
             'DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING id',
-            [id, req.userId]
+            [id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -188,7 +196,9 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         res.json({ success: true, message: 'Task deleted' });
     } catch (error) {
-        console.error('Delete task error:', error);
+        logger.error('tasks.delete_task_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -205,7 +215,7 @@ router.get('/statistics', async (req: AuthRequest, res) => {
          COUNT(*) FILTER (WHERE priority = 'Moyenne') as medium_priority,
          COUNT(*) FILTER (WHERE priority = 'Basse') as low_priority
        FROM tasks WHERE user_id = $1`,
-            [req.userId]
+            [req.userId],
         );
 
         const stats = result.rows[0];
@@ -228,7 +238,9 @@ router.get('/statistics', async (req: AuthRequest, res) => {
             },
         });
     } catch (error) {
-        console.error('Get task statistics error:', error);
+        logger.error('tasks.get_task_statistics_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { parseStringArray, serializeStringArray, toNullIfEmpty } from '../lib/normalize';
+import logger from '../lib/logger';
 
 const router = Router();
 router.use(authMiddleware);
@@ -22,7 +23,7 @@ const serializeEmergencyContact = (name: string | null, phone: string | null): s
 const parseEmergencyContact = (
     emergencyContactName: unknown,
     emergencyContactPhone: unknown,
-    emergencyContactRaw: unknown
+    emergencyContactRaw: unknown,
 ): { name: string | null; phone: string | null } => {
     const name = toNullIfEmpty(emergencyContactName as string | null);
     const phone = toNullIfEmpty(emergencyContactPhone as string | null);
@@ -56,7 +57,7 @@ const mapFamilyMember = (row: any) => {
     const emergency = parseEmergencyContact(
         row.emergency_contact_name,
         row.emergency_contact_phone,
-        row.emergency_contact
+        row.emergency_contact,
     );
 
     return {
@@ -80,11 +81,13 @@ router.get('/', async (req: AuthRequest, res) => {
     try {
         const result = await query(
             'SELECT * FROM family_members WHERE user_id = $1 ORDER BY name ASC',
-            [req.userId]
+            [req.userId],
         );
         res.json({ success: true, data: result.rows.map(mapFamilyMember) });
     } catch (error) {
-        console.error('Get family members error:', error);
+        logger.error('family.get_family_members_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -94,10 +97,10 @@ router.get('/:id', async (req: AuthRequest, res) => {
     try {
         const { id } = req.params;
 
-        const result = await query(
-            'SELECT * FROM family_members WHERE id = $1 AND user_id = $2',
-            [id, req.userId]
-        );
+        const result = await query('SELECT * FROM family_members WHERE id = $1 AND user_id = $2', [
+            id,
+            req.userId,
+        ]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Family member not found' });
@@ -105,7 +108,9 @@ router.get('/:id', async (req: AuthRequest, res) => {
 
         res.json({ success: true, data: mapFamilyMember(result.rows[0]) });
     } catch (error) {
-        console.error('Get family member error:', error);
+        logger.error('family.get_family_member_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -130,7 +135,8 @@ router.post('/', async (req: AuthRequest, res) => {
             return res.status(400).json({ success: false, error: 'Name is required' });
         }
 
-        const cleanedColor = typeof color === 'string' && color.trim() ? color.trim() : DEFAULT_COLOR;
+        const cleanedColor =
+            typeof color === 'string' && color.trim() ? color.trim() : DEFAULT_COLOR;
         if (!isValidHexColor(cleanedColor)) {
             return res.status(400).json({ success: false, error: 'Invalid color format' });
         }
@@ -187,12 +193,14 @@ router.post('/', async (req: AuthRequest, res) => {
                 serializeEmergencyContact(emergencyName, emergencyPhone),
                 notesValue,
                 notesValue,
-            ]
+            ],
         );
 
         res.json({ success: true, data: mapFamilyMember(result.rows[0]) });
     } catch (error) {
-        console.error('Create family member error:', error);
+        logger.error('family.create_family_member_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -276,15 +284,21 @@ router.put('/:id', async (req: AuthRequest, res) => {
         if (emergencyName !== undefined || emergencyPhone !== undefined) {
             const current = await query(
                 'SELECT emergency_contact_name, emergency_contact_phone FROM family_members WHERE id = $1 AND user_id = $2',
-                [id, req.userId]
+                [id, req.userId],
             );
 
             if (current.rows.length === 0) {
                 return res.status(404).json({ success: false, error: 'Family member not found' });
             }
 
-            const fallbackName = emergencyName !== undefined ? emergencyName : current.rows[0].emergency_contact_name;
-            const fallbackPhone = emergencyPhone !== undefined ? emergencyPhone : current.rows[0].emergency_contact_phone;
+            const fallbackName =
+                emergencyName !== undefined
+                    ? emergencyName
+                    : current.rows[0].emergency_contact_name;
+            const fallbackPhone =
+                emergencyPhone !== undefined
+                    ? emergencyPhone
+                    : current.rows[0].emergency_contact_phone;
             pushUpdate('emergency_contact', serializeEmergencyContact(fallbackName, fallbackPhone));
         }
 
@@ -303,7 +317,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
        SET ${updates.join(', ')}
        WHERE id = $${values.length + 1} AND user_id = $${values.length + 2}
        RETURNING *`,
-            [...values, id, req.userId]
+            [...values, id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -312,7 +326,9 @@ router.put('/:id', async (req: AuthRequest, res) => {
 
         res.json({ success: true, data: mapFamilyMember(result.rows[0]) });
     } catch (error) {
-        console.error('Update family member error:', error);
+        logger.error('family.update_family_member_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -324,7 +340,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         const result = await query(
             'DELETE FROM family_members WHERE id = $1 AND user_id = $2 RETURNING id',
-            [id, req.userId]
+            [id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -333,7 +349,9 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         res.json({ success: true, message: 'Family member deleted' });
     } catch (error) {
-        console.error('Delete family member error:', error);
+        logger.error('family.delete_family_member_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });

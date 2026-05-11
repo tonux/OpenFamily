@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { toNullIfEmpty } from '../lib/normalize';
+import logger from '../lib/logger';
 
 const router = Router();
 router.use(authMiddleware);
@@ -11,7 +12,10 @@ const ensureRecipeBelongsToUser = async (recipeId: string | null, userId: string
         return;
     }
 
-    const recipe = await query('SELECT id FROM recipes WHERE id = $1 AND user_id = $2', [recipeId, userId]);
+    const recipe = await query('SELECT id FROM recipes WHERE id = $1 AND user_id = $2', [
+        recipeId,
+        userId,
+    ]);
     if (recipe.rows.length === 0) {
         throw new Error('INVALID_RECIPE');
     }
@@ -21,11 +25,11 @@ const mapMealPlanRow = (row: any) => ({
     ...row,
     recipe: row.recipe_id
         ? {
-            id: row.recipe_id,
-            name: row.recipe_name,
-            category: row.recipe_category,
-            image_url: row.recipe_image,
-        }
+              id: row.recipe_id,
+              name: row.recipe_name,
+              category: row.recipe_category,
+              image_url: row.recipe_image,
+          }
         : null,
 });
 
@@ -57,7 +61,9 @@ router.get('/', async (req: AuthRequest, res) => {
         const result = await query(queryText, params);
         res.json({ success: true, data: result.rows.map(mapMealPlanRow) });
     } catch (error) {
-        console.error('Get meal plans error:', error);
+        logger.error('meal_plans.get_meal_plans_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -71,7 +77,9 @@ router.post('/', async (req: AuthRequest, res) => {
         const cleanedRecipeId = toNullIfEmpty(recipe_id) as string | null;
 
         if (!cleanedDate || !cleanedMealType) {
-            return res.status(400).json({ success: false, error: 'date and meal_type are required' });
+            return res
+                .status(400)
+                .json({ success: false, error: 'date and meal_type are required' });
         }
 
         await ensureRecipeBelongsToUser(cleanedRecipeId, req.userId!);
@@ -84,7 +92,14 @@ router.post('/', async (req: AuthRequest, res) => {
                      custom_meal = EXCLUDED.custom_meal,
                      notes = EXCLUDED.notes
        RETURNING *`,
-            [req.userId, cleanedDate, cleanedMealType, cleanedRecipeId, toNullIfEmpty(custom_meal), toNullIfEmpty(notes)]
+            [
+                req.userId,
+                cleanedDate,
+                cleanedMealType,
+                cleanedRecipeId,
+                toNullIfEmpty(custom_meal),
+                toNullIfEmpty(notes),
+            ],
         );
 
         const withRecipe = await query(
@@ -92,7 +107,7 @@ router.post('/', async (req: AuthRequest, res) => {
        FROM meal_plans mp
        LEFT JOIN recipes r ON mp.recipe_id = r.id
        WHERE mp.id = $1 AND mp.user_id = $2`,
-            [result.rows[0].id, req.userId]
+            [result.rows[0].id, req.userId],
         );
 
         res.json({ success: true, data: mapMealPlanRow(withRecipe.rows[0]) });
@@ -101,7 +116,9 @@ router.post('/', async (req: AuthRequest, res) => {
             return res.status(400).json({ success: false, error: 'Recipe not found' });
         }
 
-        console.error('Create meal plan error:', error);
+        logger.error('meal_plans.create_meal_plan_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -159,7 +176,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
        SET ${updates.join(', ')}
        WHERE id = $${values.length + 1} AND user_id = $${values.length + 2}
        RETURNING id`,
-            [...values, id, req.userId]
+            [...values, id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -171,7 +188,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
        FROM meal_plans mp
        LEFT JOIN recipes r ON mp.recipe_id = r.id
        WHERE mp.id = $1 AND mp.user_id = $2`,
-            [id, req.userId]
+            [id, req.userId],
         );
 
         res.json({ success: true, data: mapMealPlanRow(withRecipe.rows[0]) });
@@ -180,7 +197,9 @@ router.put('/:id', async (req: AuthRequest, res) => {
             return res.status(400).json({ success: false, error: 'Recipe not found' });
         }
 
-        console.error('Update meal plan error:', error);
+        logger.error('meal_plans.update_meal_plan_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -192,7 +211,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         const result = await query(
             'DELETE FROM meal_plans WHERE id = $1 AND user_id = $2 RETURNING id',
-            [id, req.userId]
+            [id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -201,7 +220,9 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         res.json({ success: true, message: 'Meal plan deleted' });
     } catch (error) {
-        console.error('Delete meal plan error:', error);
+        logger.error('meal_plans.delete_meal_plan_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });

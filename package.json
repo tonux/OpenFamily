@@ -20,10 +20,33 @@
     "docker:down": "docker-compose down",
     "docker:build": "docker-compose build",
     "smoke:api": "./scripts/smoke-api.sh",
-    "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../shared && npm install"
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../shared && npm install",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test:server",
+    "test:server": "cd server && vitest run",
+    "test:server:watch": "cd server && vitest",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@electric-sql/pglite": "^0.4.5",
+    "@eslint/js": "^9.39.4",
+    "@types/supertest": "^7.2.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "pg-protocol": "^1.13.0",
+    "prettier": "^3.8.3",
+    "supertest": "^7.2.2",
+    "typescript-eslint": "^8.59.2",
+    "vitest": "^4.1.5"
   },
   "overrides": {
     "serialize-javascript": "7.0.5"

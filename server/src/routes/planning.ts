@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getClient, query } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { toNullIfEmpty } from '../lib/normalize';
+import logger from '../lib/logger';
 
 const router = Router();
 router.use(authMiddleware);
@@ -48,14 +49,14 @@ const parseDayList = (value: unknown): number[] => {
 
 const timeToMinutes = (time: string): number => {
     const [hours, minutes] = time.split(':').map(Number);
-    return (hours * 60) + minutes;
+    return hours * 60 + minutes;
 };
 
 const ensureMemberBelongsToUser = async (memberId: string, userId: string) => {
-    const member = await query(
-        'SELECT id FROM family_members WHERE id = $1 AND user_id = $2',
-        [memberId, userId]
-    );
+    const member = await query('SELECT id FROM family_members WHERE id = $1 AND user_id = $2', [
+        memberId,
+        userId,
+    ]);
 
     if (member.rows.length === 0) {
         throw new Error('INVALID_MEMBER');
@@ -69,7 +70,7 @@ const ensureNoOverlap = async (
     startTime: string,
     endTime: string,
     specificDate: string | null,
-    excludeId?: string
+    excludeId?: string,
 ) => {
     const result = await query(
         `SELECT id
@@ -96,7 +97,7 @@ const ensureNoOverlap = async (
                END
            )
          LIMIT 1`,
-        [userId, memberId, dayOfWeek, endTime, startTime, excludeId || null, specificDate]
+        [userId, memberId, dayOfWeek, endTime, startTime, excludeId || null, specificDate],
     );
 
     if (result.rows.length > 0) {
@@ -115,7 +116,11 @@ const mapEntryRow = (row: any) => ({
     day_of_week: Number(row.day_of_week),
     start_time: row.start_time,
     end_time: row.end_time,
-    specific_date: row.specific_date ? (typeof row.specific_date === 'string' ? row.specific_date.slice(0, 10) : row.specific_date.toISOString().slice(0, 10)) : null,
+    specific_date: row.specific_date
+        ? typeof row.specific_date === 'string'
+            ? row.specific_date.slice(0, 10)
+            : row.specific_date.toISOString().slice(0, 10)
+        : null,
     location: row.location,
     notes: row.notes,
     created_at: row.created_at,
@@ -128,7 +133,7 @@ const getEntryById = async (id: string, userId: string) => {
          FROM schedule_entries se
          JOIN family_members fm ON se.family_member_id = fm.id
          WHERE se.id = $1 AND se.user_id = $2`,
-        [id, userId]
+        [id, userId],
     );
 
     return result.rows[0] || null;
@@ -153,7 +158,9 @@ router.get('/', async (req: AuthRequest, res) => {
         if (day_of_week !== undefined) {
             const parsedDay = parseDayOfWeek(day_of_week);
             if (parsedDay === null) {
-                return res.status(400).json({ success: false, error: 'day_of_week must be between 1 and 7' });
+                return res
+                    .status(400)
+                    .json({ success: false, error: 'day_of_week must be between 1 and 7' });
             }
             params.push(parsedDay);
             queryText += ` AND se.day_of_week = $${params.length}`;
@@ -178,7 +185,9 @@ router.get('/', async (req: AuthRequest, res) => {
         const result = await query(queryText, params);
         return res.json({ success: true, data: result.rows.map(mapEntryRow) });
     } catch (error) {
-        console.error('Get planning entries error:', error);
+        logger.error('planning.get_planning_entries_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         return res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -198,7 +207,8 @@ router.post('/', async (req: AuthRequest, res) => {
 
         const memberId = toNullIfEmpty(family_member_id) as string | null;
         const cleanedTitle = typeof title === 'string' ? title.trim() : '';
-        const cleanedType = typeof schedule_type === 'string' ? schedule_type.trim().toLowerCase() : '';
+        const cleanedType =
+            typeof schedule_type === 'string' ? schedule_type.trim().toLowerCase() : '';
         const parsedDay = parseDayOfWeek(day_of_week);
         const startTime = normalizeTime(start_time);
         const endTime = normalizeTime(end_time);
@@ -215,7 +225,9 @@ router.post('/', async (req: AuthRequest, res) => {
         }
 
         if (timeToMinutes(endTime) === timeToMinutes(startTime)) {
-            return res.status(400).json({ success: false, error: 'start_time and end_time cannot be the same' });
+            return res
+                .status(400)
+                .json({ success: false, error: 'start_time and end_time cannot be the same' });
         }
 
         const specificDate = toNullIfEmpty(req.body.specific_date) as string | null;
@@ -239,7 +251,7 @@ router.post('/', async (req: AuthRequest, res) => {
                 specificDate,
                 toNullIfEmpty(location),
                 toNullIfEmpty(notes),
-            ]
+            ],
         );
 
         const row = await getEntryById(inserted.rows[0].id, req.userId!);
@@ -255,7 +267,9 @@ router.post('/', async (req: AuthRequest, res) => {
             });
         }
 
-        console.error('Create planning entry error:', error);
+        logger.error('planning.create_planning_entry_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         return res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -279,7 +293,8 @@ router.post('/bulk', async (req: AuthRequest, res) => {
 
         const memberId = toNullIfEmpty(family_member_id) as string | null;
         const cleanedTitle = typeof title === 'string' ? title.trim() : '';
-        const cleanedType = typeof schedule_type === 'string' ? schedule_type.trim().toLowerCase() : '';
+        const cleanedType =
+            typeof schedule_type === 'string' ? schedule_type.trim().toLowerCase() : '';
         const startTime = normalizeTime(start_time);
         const endTime = normalizeTime(end_time);
         const dayList = parseDayList(day_of_week_list);
@@ -298,7 +313,9 @@ router.post('/bulk', async (req: AuthRequest, res) => {
         }
 
         if (timeToMinutes(endTime) <= timeToMinutes(startTime)) {
-            return res.status(400).json({ success: false, error: 'end_time must be after start_time' });
+            return res
+                .status(400)
+                .json({ success: false, error: 'end_time must be after start_time' });
         }
 
         await ensureMemberBelongsToUser(memberId, req.userId!);
@@ -307,7 +324,7 @@ router.post('/bulk', async (req: AuthRequest, res) => {
         if (sourceId) {
             const existing = await query(
                 'SELECT * FROM schedule_entries WHERE id = $1 AND user_id = $2',
-                [sourceId, req.userId]
+                [sourceId, req.userId],
             );
 
             if (existing.rows.length === 0) {
@@ -323,7 +340,11 @@ router.post('/bulk', async (req: AuthRequest, res) => {
         let createdCount = 0;
         let updatedCount = 0;
 
-        const findOverlaps = async (dayOfWeek: number, specificDate: string | null, excludeId?: string) => {
+        const findOverlaps = async (
+            dayOfWeek: number,
+            specificDate: string | null,
+            excludeId?: string,
+        ) => {
             const conflict = await client.query(
                 `SELECT id
                  FROM schedule_entries
@@ -348,7 +369,15 @@ router.post('/bulk', async (req: AuthRequest, res) => {
                        ELSE specific_date IS NULL OR specific_date = $7::date
                        END
                    )`,
-                [req.userId, memberId, dayOfWeek, endTime, startTime, excludeId || null, specificDate]
+                [
+                    req.userId,
+                    memberId,
+                    dayOfWeek,
+                    endTime,
+                    startTime,
+                    excludeId || null,
+                    specificDate,
+                ],
             );
             return conflict.rows.map((row) => row.id as string);
         };
@@ -358,7 +387,11 @@ router.post('/bulk', async (req: AuthRequest, res) => {
             const excludeId = isSourceDay ? sourceEntry.id : undefined;
 
             const specificDate = week_start
-                ? (() => { const d = new Date(week_start); d.setDate(d.getDate() + dayOfWeek - 1); return d.toISOString().slice(0, 10); })()
+                ? (() => {
+                      const d = new Date(week_start);
+                      d.setDate(d.getDate() + dayOfWeek - 1);
+                      return d.toISOString().slice(0, 10);
+                  })()
                 : null;
 
             const overlapIds = await findOverlaps(dayOfWeek, specificDate, excludeId);
@@ -392,7 +425,15 @@ router.post('/bulk', async (req: AuthRequest, res) => {
                            ELSE specific_date IS NULL OR specific_date = $7::date
                            END
                        )`,
-                    [req.userId, memberId, dayOfWeek, endTime, startTime, excludeId || null, specificDate]
+                    [
+                        req.userId,
+                        memberId,
+                        dayOfWeek,
+                        endTime,
+                        startTime,
+                        excludeId || null,
+                        specificDate,
+                    ],
                 );
             }
 
@@ -421,7 +462,7 @@ router.post('/bulk', async (req: AuthRequest, res) => {
                         toNullIfEmpty(notes),
                         sourceEntry.id,
                         req.userId,
-                    ]
+                    ],
                 );
                 touchedIds.push(sourceEntry.id);
                 updatedCount += 1;
@@ -444,7 +485,7 @@ router.post('/bulk', async (req: AuthRequest, res) => {
                     specificDate,
                     toNullIfEmpty(location),
                     toNullIfEmpty(notes),
-                ]
+                ],
             );
 
             touchedIds.push(inserted.rows[0].id);
@@ -462,7 +503,7 @@ router.post('/bulk', async (req: AuthRequest, res) => {
                  WHERE se.user_id = $1
                    AND se.id = ANY($2::uuid[])
                  ORDER BY se.day_of_week ASC, se.start_time ASC`,
-                [req.userId, touchedIds]
+                [req.userId, touchedIds],
             );
             mappedRows = rows.rows.map(mapEntryRow);
         }
@@ -481,7 +522,9 @@ router.post('/bulk', async (req: AuthRequest, res) => {
         if (error instanceof Error && error.message === 'INVALID_MEMBER') {
             return res.status(400).json({ success: false, error: 'Family member not found' });
         }
-        console.error('Bulk planning update error:', error);
+        logger.error('planning.bulk_planning_update_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         return res.status(500).json({ success: false, error: 'Internal server error' });
     } finally {
         client.release();
@@ -494,7 +537,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
 
         const existing = await query(
             'SELECT * FROM schedule_entries WHERE id = $1 AND user_id = $2',
-            [id, req.userId]
+            [id, req.userId],
         );
 
         if (existing.rows.length === 0) {
@@ -503,24 +546,27 @@ router.put('/:id', async (req: AuthRequest, res) => {
 
         const current = existing.rows[0];
 
-        const memberId = (req.body.family_member_id !== undefined
-            ? toNullIfEmpty(req.body.family_member_id)
-            : current.family_member_id) as string | null;
-        const cleanedTitle = typeof req.body.title === 'string'
-            ? req.body.title.trim()
-            : current.title;
-        const cleanedType = typeof req.body.schedule_type === 'string'
-            ? req.body.schedule_type.trim().toLowerCase()
-            : current.schedule_type;
-        const parsedDay = req.body.day_of_week !== undefined
-            ? parseDayOfWeek(req.body.day_of_week)
-            : Number(current.day_of_week);
-        const startTime = req.body.start_time !== undefined
-            ? normalizeTime(req.body.start_time)
-            : current.start_time;
-        const endTime = req.body.end_time !== undefined
-            ? normalizeTime(req.body.end_time)
-            : current.end_time;
+        const memberId = (
+            req.body.family_member_id !== undefined
+                ? toNullIfEmpty(req.body.family_member_id)
+                : current.family_member_id
+        ) as string | null;
+        const cleanedTitle =
+            typeof req.body.title === 'string' ? req.body.title.trim() : current.title;
+        const cleanedType =
+            typeof req.body.schedule_type === 'string'
+                ? req.body.schedule_type.trim().toLowerCase()
+                : current.schedule_type;
+        const parsedDay =
+            req.body.day_of_week !== undefined
+                ? parseDayOfWeek(req.body.day_of_week)
+                : Number(current.day_of_week);
+        const startTime =
+            req.body.start_time !== undefined
+                ? normalizeTime(req.body.start_time)
+                : current.start_time;
+        const endTime =
+            req.body.end_time !== undefined ? normalizeTime(req.body.end_time) : current.end_time;
 
         if (!memberId || !cleanedTitle || !parsedDay || !startTime || !endTime) {
             return res.status(400).json({
@@ -534,15 +580,30 @@ router.put('/:id', async (req: AuthRequest, res) => {
         }
 
         if (timeToMinutes(endTime) === timeToMinutes(startTime)) {
-            return res.status(400).json({ success: false, error: 'start_time and end_time cannot be the same' });
+            return res
+                .status(400)
+                .json({ success: false, error: 'start_time and end_time cannot be the same' });
         }
 
-        const specificDate = req.body.specific_date !== undefined
-            ? toNullIfEmpty(req.body.specific_date) as string | null
-            : (current.specific_date ? (typeof current.specific_date === 'string' ? current.specific_date.slice(0, 10) : current.specific_date.toISOString().slice(0, 10)) : null);
+        const specificDate =
+            req.body.specific_date !== undefined
+                ? (toNullIfEmpty(req.body.specific_date) as string | null)
+                : current.specific_date
+                  ? typeof current.specific_date === 'string'
+                      ? current.specific_date.slice(0, 10)
+                      : current.specific_date.toISOString().slice(0, 10)
+                  : null;
 
         await ensureMemberBelongsToUser(memberId, req.userId!);
-        await ensureNoOverlap(req.userId!, memberId, parsedDay, startTime, endTime, specificDate, id);
+        await ensureNoOverlap(
+            req.userId!,
+            memberId,
+            parsedDay,
+            startTime,
+            endTime,
+            specificDate,
+            id,
+        );
 
         await query(
             `UPDATE schedule_entries
@@ -564,11 +625,13 @@ router.put('/:id', async (req: AuthRequest, res) => {
                 startTime,
                 endTime,
                 specificDate,
-                req.body.location !== undefined ? toNullIfEmpty(req.body.location) : current.location,
+                req.body.location !== undefined
+                    ? toNullIfEmpty(req.body.location)
+                    : current.location,
                 req.body.notes !== undefined ? toNullIfEmpty(req.body.notes) : current.notes,
                 id,
                 req.userId,
-            ]
+            ],
         );
 
         const row = await getEntryById(id, req.userId!);
@@ -584,7 +647,9 @@ router.put('/:id', async (req: AuthRequest, res) => {
             });
         }
 
-        console.error('Update planning entry error:', error);
+        logger.error('planning.update_planning_entry_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         return res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -594,7 +659,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
         const { id } = req.params;
         const result = await query(
             'DELETE FROM schedule_entries WHERE id = $1 AND user_id = $2 RETURNING id',
-            [id, req.userId]
+            [id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -603,7 +668,9 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         return res.json({ success: true, message: 'Planning entry deleted' });
     } catch (error) {
-        console.error('Delete planning entry error:', error);
+        logger.error('planning.delete_planning_entry_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         return res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });

@@ -1,0 +1,58 @@
+{
+  "app": {
+    "name": "OpenFamily"
+  },
+  "nav": {
+    "today": "Today",
+    "shopping": "Shopping",
+    "tasks": "Tasks",
+    "appointments": "Appointments",
+    "planning": "Schedule",
+    "recipes": "Recipes",
+    "meals": "Meals",
+    "budget": "Budget",
+    "family": "Family",
+    "settings": "Settings",
+    "mobile": {
+      "home": "Home",
+      "planning": "Schedule",
+      "lists": "Lists",
+      "budget": "Budget",
+      "family": "Family"
+    }
+  },
+  "quick_actions": {
+    "open": "Quick actions",
+    "close": "Close",
+    "add_shopping": "Add a shopping item",
+    "add_task": "Add a task",
+    "add_appointment": "Add an appointment",
+    "add_schedule": "Add a schedule entry",
+    "add_recipe": "Add a recipe",
+    "add_meal": "Add a meal",
+    "add_expense": "Add an expense",
+    "add_member": "Add a family member"
+  },
+  "header": {
+    "toggle_dark": "Switch to dark theme",
+    "toggle_light": "Switch to light theme",
+    "logout": "Log out",
+    "open_menu": "Open menu",
+    "close_menu": "Close menu"
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "back": "Back",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "yes": "Yes",
+    "no": "No",
+    "error": "An error occurred",
+    "retry": "Retry"
+  }
+}

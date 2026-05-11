@@ -3,10 +3,17 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Disable husky's prepare script — git hooks aren't relevant in containers.
+ENV HUSKY=0
+
 # Copy package files
 COPY package.json ./
 COPY client/package.json ./client/
 COPY shared/package.json ./shared/
+
+# Strip the husky `prepare` script: git hooks aren't relevant in containers
+# and husky is a devDep — running it would fail on any --production install.
+RUN npm pkg delete scripts.prepare
 
 # Install dependencies
 RUN npm install --legacy-peer-deps

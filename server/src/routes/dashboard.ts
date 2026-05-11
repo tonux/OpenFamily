@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import logger from '../lib/logger';
 
 const router = Router();
 router.use(authMiddleware);
@@ -12,21 +13,21 @@ router.get('/', async (req: AuthRequest, res) => {
         const appointmentsResult = await query(
             `SELECT COUNT(*) as count FROM appointments 
        WHERE user_id = $1 AND start_time >= NOW() AND start_time <= NOW() + INTERVAL '7 days'`,
-            [req.userId]
+            [req.userId],
         );
 
         // Get pending tasks count
         const tasksResult = await query(
             `SELECT COUNT(*) as count FROM tasks 
        WHERE user_id = $1 AND is_completed = false`,
-            [req.userId]
+            [req.userId],
         );
 
         // Get shopping items count
         const shoppingResult = await query(
             `SELECT COUNT(*) as count FROM shopping_items 
        WHERE user_id = $1 AND is_checked = false`,
-            [req.userId]
+            [req.userId],
         );
 
         // Get this month's expenses
@@ -35,7 +36,7 @@ router.get('/', async (req: AuthRequest, res) => {
        WHERE user_id = $1 AND is_expense = true 
        AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM NOW())
        AND EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM NOW())`,
-            [req.userId]
+            [req.userId],
         );
 
         // Get budget alerts (categories over limit)
@@ -55,7 +56,7 @@ router.get('/', async (req: AuthRequest, res) => {
          GROUP BY be.category, bl.monthly_limit
          HAVING SUM(be.amount) > bl.monthly_limit
        ) alert_categories`,
-            [req.userId]
+            [req.userId],
         );
 
         res.json({
@@ -65,11 +66,13 @@ router.get('/', async (req: AuthRequest, res) => {
                 pendingTasks: parseInt(tasksResult.rows[0]?.count || '0'),
                 shoppingItems: parseInt(shoppingResult.rows[0]?.count || '0'),
                 thisMonthExpenses: parseFloat(budgetResult.rows[0]?.total || '0'),
-                budgetAlerts: parseInt(alertsResult.rows[0]?.count || '0')
-            }
+                budgetAlerts: parseInt(alertsResult.rows[0]?.count || '0'),
+            },
         });
     } catch (error) {
-        console.error('Get dashboard stats error:', error);
+        logger.error('dashboard.get_dashboard_stats_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });

@@ -1,35 +1,24 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { api } from '../lib/api';
-import { Plus, Trash2, Check, ShoppingBag, Save, ListChecks } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Plus, Trash2, Check, ShoppingBag, Save, ListChecks, Sparkles, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Dialog } from '../components/ui';
 import { useCurrency } from '../lib/useCurrency';
-
-interface ShoppingItem {
-    id: string;
-    name: string;
-    category: string;
-    quantity?: number;
-    unit?: string;
-    price?: number;
-    is_checked: boolean;
-    notes?: string;
-}
-
-interface ShoppingTemplate {
-    id: string;
-    name: string;
-    items: Array<{
-        name: string;
-        category: string;
-        quantity?: number;
-        unit?: string;
-        price?: number;
-        notes?: string;
-    }>;
-}
+import {
+    type ShoppingItem,
+    type ShoppingTemplate,
+    useApplyTemplate,
+    useClearCheckedItems,
+    useCreateShoppingItem,
+    useCreateTemplate,
+    useDeleteShoppingItem,
+    useDeleteTemplate,
+    useShoppingItems,
+    useShoppingTemplates,
+    useUpdateShoppingItem,
+} from '../hooks/useShopping';
+import { useParseShoppingText, type AiParsedItem } from '../hooks/useAiShopping';
 
 const categories = ['Alimentation', 'Bebe', 'Menage', 'Sante', 'Autre'];
 
@@ -45,8 +34,24 @@ const parseOptionalPositiveNumber = (value: string): number | undefined => {
 
 const ShoppingList: React.FC = () => {
     const { format: formatMoney } = useCurrency();
-    const [items, setItems] = useState<ShoppingItem[]>([]);
-    const [templates, setTemplates] = useState<ShoppingTemplate[]>([]);
+
+    // React Query owns the data lifecycle now — cache, dedup, refetch on focus,
+    // and (for write paths) optimistic updates with rollback are handled by the
+    // hooks in useShopping. UI state stays here.
+    const itemsQuery = useShoppingItems();
+    const templatesQuery = useShoppingTemplates();
+    const items: ShoppingItem[] = itemsQuery.data ?? [];
+    const templates: ShoppingTemplate[] = templatesQuery.data ?? [];
+    const loading = itemsQuery.isPending || templatesQuery.isPending;
+
+    const createItem = useCreateShoppingItem();
+    const updateItem = useUpdateShoppingItem();
+    const deleteItemMutation = useDeleteShoppingItem();
+    const clearCheckedMutation = useClearCheckedItems();
+    const createTemplateMutation = useCreateTemplate();
+    const applyTemplateMutation = useApplyTemplate();
+    const deleteTemplateMutation = useDeleteTemplate();
+
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
     const [templateName, setTemplateName] = useState('');
     const [newItem, setNewItem] = useState({
@@ -56,51 +61,31 @@ const ShoppingList: React.FC = () => {
         price: '',
         unit: '',
     });
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
     const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
-    useEffect(() => {
-        void Promise.all([loadItems(), loadTemplates()]).finally(() => setLoading(false));
-    }, []);
+    // AI: free-form text → list of items (PR #17).
+    // - `aiText` is the textarea content
+    // - `aiPreview` is the parsed result (null = nothing to review yet)
+    // - per-line checkbox state lives in `aiKeep`
+    const parseAi = useParseShoppingText();
+    const [aiText, setAiText] = useState('');
+    const [aiPreview, setAiPreview] = useState<AiParsedItem[] | null>(null);
+    const [aiKeep, setAiKeep] = useState<boolean[]>([]);
 
-    const loadItems = async () => {
-        try {
-            const response = await api.get<{ success: boolean; data: ShoppingItem[] }>(
-                '/api/shopping',
-            );
-            if (response.success) {
-                setItems(response.data);
-            }
-        } catch (err) {
-            console.error('Failed to load shopping items:', err);
-            setError(
-                err instanceof Error ? err.message : 'Impossible de charger la liste de courses.',
-            );
-        }
-    };
-
-    const loadTemplates = async () => {
-        try {
-            const response = await api.get<{ success: boolean; data: ShoppingTemplate[] }>(
-                '/api/shopping/templates',
-            );
-            if (response.success) {
-                setTemplates(response.data);
-            }
-        } catch (err) {
-            console.error('Failed to load templates:', err);
-            setError(err instanceof Error ? err.message : 'Impossible de charger les templates.');
-        }
-    };
+    // Surface query errors in the same banner used by user actions.
+    const fetchError =
+        (itemsQuery.error instanceof Error ? itemsQuery.error.message : null) ??
+        (templatesQuery.error instanceof Error ? templatesQuery.error.message : null);
+    const displayedError = error || fetchError || '';
 
     const addItem = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
 
         if (!newItem.name.trim()) {
-            setError('Le nom de l article est obligatoire.');
+            setError("Le nom de l'article est obligatoire.");
             return;
         }
 
@@ -108,61 +93,45 @@ const ShoppingList: React.FC = () => {
         const price = parseOptionalPositiveNumber(newItem.price);
 
         if (quantity !== undefined && (!Number.isFinite(quantity) || quantity <= 0)) {
-            setError('La quantite doit etre un nombre positif.');
+            setError('La quantité doit être un nombre positif.');
             return;
         }
 
         if (price !== undefined && (!Number.isFinite(price) || price < 0)) {
-            setError('Le prix doit etre un nombre valide.');
+            setError('Le prix doit être un nombre valide.');
             return;
         }
 
         try {
-            const response = await api.post<{ success: boolean; data: ShoppingItem }>(
-                '/api/shopping',
-                {
-                    name: newItem.name,
-                    category: newItem.category,
-                    quantity,
-                    price,
-                    unit: newItem.unit || null,
-                },
-            );
-
-            if (response.success) {
-                setItems((prev) => [response.data, ...prev]);
-                setNewItem({
-                    name: '',
-                    category: 'Alimentation',
-                    quantity: '',
-                    price: '',
-                    unit: '',
-                });
-            }
+            await createItem.mutateAsync({
+                name: newItem.name,
+                category: newItem.category,
+                quantity,
+                price,
+                unit: newItem.unit || undefined,
+            });
+            setNewItem({
+                name: '',
+                category: 'Alimentation',
+                quantity: '',
+                price: '',
+                unit: '',
+            });
         } catch (err) {
-            console.error('Failed to add item:', err);
-            setError(err instanceof Error ? err.message : 'Impossible d ajouter cet article.');
+            setError(err instanceof Error ? err.message : "Impossible d'ajouter cet article.");
         }
     };
 
     const toggleItem = async (item: ShoppingItem) => {
         setError('');
         try {
-            const response = await api.put<{ success: boolean; data: ShoppingItem }>(
-                `/api/shopping/${item.id}`,
-                {
-                    is_checked: !item.is_checked,
-                },
-            );
-            if (response.success) {
-                setItems((prev) =>
-                    prev.map((current) => (current.id === item.id ? response.data : current)),
-                );
-            }
+            await updateItem.mutateAsync({
+                id: item.id,
+                patch: { is_checked: !item.is_checked },
+            });
         } catch (err) {
-            console.error('Failed to toggle item:', err);
             setError(
-                err instanceof Error ? err.message : 'Impossible de mettre a jour cet article.',
+                err instanceof Error ? err.message : 'Impossible de mettre à jour cet article.',
             );
         }
     };
@@ -170,10 +139,8 @@ const ShoppingList: React.FC = () => {
     const deleteItem = async (id: string) => {
         setError('');
         try {
-            await api.delete(`/api/shopping/${id}`);
-            setItems((prev) => prev.filter((item) => item.id !== id));
+            await deleteItemMutation.mutateAsync(id);
         } catch (err) {
-            console.error('Failed to delete item:', err);
             setError(err instanceof Error ? err.message : 'Impossible de supprimer cet article.');
         }
     };
@@ -181,12 +148,10 @@ const ShoppingList: React.FC = () => {
     const clearCheckedItems = async () => {
         setError('');
         try {
-            await api.delete('/api/shopping/checked/clear');
-            setItems((prev) => prev.filter((item) => !item.is_checked));
+            await clearCheckedMutation.mutateAsync();
         } catch (err) {
-            console.error('Failed to clear checked items:', err);
             setError(
-                err instanceof Error ? err.message : 'Impossible de vider les articles coches.',
+                err instanceof Error ? err.message : 'Impossible de vider les articles cochés.',
             );
         }
     };
@@ -254,16 +219,11 @@ const ShoppingList: React.FC = () => {
         }
 
         try {
-            await api.post('/api/shopping/templates', {
-                name,
-                items: templateItems,
-            });
+            await createTemplateMutation.mutateAsync({ name, items: templateItems });
             setTemplateName('');
             setTemplateDialogOpen(false);
             setSelectedItemIds(new Set());
-            await loadTemplates();
         } catch (err) {
-            console.error('Failed to save template:', err);
             setError(err instanceof Error ? err.message : "Impossible d'enregistrer le template.");
         }
     };
@@ -271,34 +231,85 @@ const ShoppingList: React.FC = () => {
     const applyTemplate = async () => {
         setError('');
         if (!selectedTemplateId) {
-            setError('Selectionnez un template a appliquer.');
+            setError('Sélectionnez un template à appliquer.');
             return;
         }
 
         try {
-            await api.post(`/api/shopping/templates/${selectedTemplateId}/apply`, {});
-            await loadItems();
+            await applyTemplateMutation.mutateAsync(selectedTemplateId);
         } catch (err) {
-            console.error('Failed to apply template:', err);
-            setError(err instanceof Error ? err.message : 'Impossible d appliquer ce template.');
+            setError(err instanceof Error ? err.message : "Impossible d'appliquer ce template.");
         }
     };
 
     const deleteTemplate = async () => {
         setError('');
         if (!selectedTemplateId) {
-            setError('Selectionnez un template a supprimer.');
+            setError('Sélectionnez un template à supprimer.');
             return;
         }
 
         try {
-            await api.delete(`/api/shopping/templates/${selectedTemplateId}`);
+            await deleteTemplateMutation.mutateAsync(selectedTemplateId);
             setSelectedTemplateId('');
-            await loadTemplates();
         } catch (err) {
-            console.error('Failed to delete template:', err);
             setError(err instanceof Error ? err.message : 'Impossible de supprimer ce template.');
         }
+    };
+
+    // ------------------------------------------------------------------ //
+    // AI handlers                                                         //
+    // ------------------------------------------------------------------ //
+
+    const runAiParse = async () => {
+        setError('');
+        const text = aiText.trim();
+        if (!text) {
+            setError('Décris tes courses en français pour utiliser l’IA.');
+            return;
+        }
+        try {
+            const items = await parseAi.mutateAsync(text);
+            setAiPreview(items);
+            setAiKeep(items.map(() => true));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "L'IA n'a pas pu analyser ce texte.");
+        }
+    };
+
+    const dismissAiPreview = () => {
+        setAiPreview(null);
+        setAiKeep([]);
+        setAiText('');
+    };
+
+    const acceptAiPreview = async () => {
+        if (!aiPreview) return;
+        setError('');
+        const toCreate = aiPreview.filter((_, i) => aiKeep[i]);
+        if (toCreate.length === 0) {
+            dismissAiPreview();
+            return;
+        }
+        try {
+            // Sequential creates keep us under the per-IP rate limit and let
+            // each row optimistically appear in the list as it's inserted.
+            for (const item of toCreate) {
+                await createItem.mutateAsync({
+                    name: item.name,
+                    category: item.category,
+                    quantity: item.quantity ?? undefined,
+                    unit: item.unit ?? undefined,
+                });
+            }
+            dismissAiPreview();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Impossible d'ajouter ces articles.");
+        }
+    };
+
+    const toggleAiKeep = (idx: number) => {
+        setAiKeep((prev) => prev.map((v, i) => (i === idx ? !v : v)));
     };
 
     const pendingItems = useMemo(() => items.filter((item) => !item.is_checked), [items]);
@@ -327,9 +338,9 @@ const ShoppingList: React.FC = () => {
 
     return (
         <div className="mx-auto max-w-4xl space-y-6">
-            {error ? (
+            {displayedError ? (
                 <div className="rounded-input border border-danger/30 bg-danger/10 px-4 py-3 text-caption text-danger">
-                    {error}
+                    {displayedError}
                 </div>
             ) : null}
 
@@ -344,6 +355,87 @@ const ShoppingList: React.FC = () => {
                     </p>
                 </div>
             </div>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                        Ajouter via l’IA
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <p className="text-caption text-muted-foreground">
+                        Décris tes courses en une phrase. Exemple : « ajoute du lait, 6 yaourts à la
+                        fraise et 2 baguettes ».
+                    </p>
+                    <textarea
+                        className="input-nexus min-h-[80px] py-2 text-caption"
+                        placeholder="Ajoute du lait, 6 yaourts…"
+                        value={aiText}
+                        onChange={(e) => setAiText(e.target.value)}
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            onClick={runAiParse}
+                            disabled={parseAi.isPending || !aiText.trim()}
+                        >
+                            <Sparkles className="mr-1 h-4 w-4" />
+                            {parseAi.isPending ? 'Analyse…' : 'Analyser'}
+                        </Button>
+                        {aiPreview ? (
+                            <Button type="button" variant="secondary" onClick={dismissAiPreview}>
+                                <X className="mr-1 h-4 w-4" />
+                                Annuler
+                            </Button>
+                        ) : null}
+                    </div>
+
+                    {aiPreview ? (
+                        <div className="mt-2 space-y-2">
+                            <p className="text-caption font-medium text-foreground">
+                                {aiPreview.length === 0
+                                    ? 'Aucun article détecté.'
+                                    : `${aiKeep.filter(Boolean).length}/${aiPreview.length} articles à ajouter`}
+                            </p>
+                            <ul className="space-y-1">
+                                {aiPreview.map((item, idx) => (
+                                    <li
+                                        key={`${item.name}-${idx}`}
+                                        className="flex items-center gap-3 rounded-input border border-border bg-card px-3 py-2 text-caption"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={aiKeep[idx] ?? true}
+                                            onChange={() => toggleAiKeep(idx)}
+                                            className="h-4 w-4"
+                                            aria-label={`Conserver ${item.name}`}
+                                        />
+                                        <span className="flex-1 truncate">
+                                            {item.quantity != null ? `${item.quantity} ` : ''}
+                                            {item.unit ? `${item.unit} ` : ''}
+                                            {item.name}
+                                        </span>
+                                        <span className="text-micro text-muted-foreground">
+                                            {item.category}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                            {aiPreview.length > 0 ? (
+                                <Button
+                                    type="button"
+                                    onClick={acceptAiPreview}
+                                    disabled={createItem.isPending}
+                                >
+                                    <Check className="mr-1 h-4 w-4" />
+                                    Ajouter à la liste
+                                </Button>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </CardContent>
+            </Card>
 
             <Card>
                 <CardHeader>

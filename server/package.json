@@ -1,35 +1,43 @@
 {
-    "name": "@openfamily/server",
-    "version": "1.0.5",
-    "description": "OpenFamily backend server",
-    "main": "dist/index.js",
-    "scripts": {
-        "dev": "tsx watch src/index.ts",
-        "build": "tsc",
-        "start": "node dist/index.js"
-    },
-    "dependencies": {
-        "bcrypt": "^6.0.0",
-        "cors": "^2.8.5",
-        "date-fns": "^3.0.6",
-        "dotenv": "^16.3.1",
-        "express": "^4.18.2",
-        "express-rate-limit": "^8.4.0",
-        "jsonwebtoken": "^9.0.2",
-        "pg": "^8.11.3",
-        "web-push": "^3.6.6",
-        "ws": "^8.16.0"
-    },
-    "devDependencies": {
-        "@types/bcrypt": "^5.0.2",
-        "@types/cors": "^2.8.17",
-        "@types/express": "^4.17.21",
-        "@types/jsonwebtoken": "^9.0.5",
-        "@types/node": "^20.10.6",
-        "@types/pg": "^8.10.9",
-        "@types/web-push": "^3.6.3",
-        "@types/ws": "^8.5.10",
-        "tsx": "^4.7.0",
-        "typescript": "^5.3.3"
-    }
+  "name": "@openfamily/server",
+  "version": "1.0.5",
+  "description": "OpenFamily backend server",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:migrate": "node-pg-migrate -m migrations -t pgmigrations up",
+    "db:migrate:down": "node-pg-migrate -m migrations -t pgmigrations down",
+    "db:migrate:create": "node-pg-migrate create"
+  },
+  "dependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "date-fns": "^3.0.6",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.4.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "node-pg-migrate": "^8.0.4",
+    "pg": "^8.11.3",
+    "web-push": "^3.6.6",
+    "ws": "^8.16.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^20.10.6",
+    "@types/pg": "^8.10.9",
+    "@types/web-push": "^3.6.3",
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
 }

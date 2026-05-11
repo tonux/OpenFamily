@@ -1,0 +1,10 @@
+node_modules
+**/dist
+**/build
+**/coverage
+**/.vite
+**/*.tsbuildinfo
+package-lock.json
+client/public
+server/migrations
+shared/dist

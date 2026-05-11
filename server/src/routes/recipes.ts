@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { toNullIfEmpty, toOptionalNumber } from '../lib/normalize';
+import logger from '../lib/logger';
 
 const router = Router();
 router.use(authMiddleware);
@@ -29,7 +30,9 @@ router.get('/', async (req: AuthRequest, res) => {
         const result = await query(queryText, params);
         res.json({ success: true, data: result.rows });
     } catch (error) {
-        console.error('Get recipes error:', error);
+        logger.error('recipes.get_recipes_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -39,10 +42,10 @@ router.get('/:id', async (req: AuthRequest, res) => {
     try {
         const { id } = req.params;
 
-        const result = await query(
-            'SELECT * FROM recipes WHERE id = $1 AND user_id = $2',
-            [id, req.userId]
-        );
+        const result = await query('SELECT * FROM recipes WHERE id = $1 AND user_id = $2', [
+            id,
+            req.userId,
+        ]);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Recipe not found' });
@@ -50,7 +53,9 @@ router.get('/:id', async (req: AuthRequest, res) => {
 
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
-        console.error('Get recipe error:', error);
+        logger.error('recipes.get_recipe_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -58,13 +63,30 @@ router.get('/:id', async (req: AuthRequest, res) => {
 // Create recipe
 router.post('/', async (req: AuthRequest, res) => {
     try {
-        const { name, category, description, ingredients, instructions, prep_time, cook_time, servings, difficulty, tags, image_url } = req.body;
+        const {
+            name,
+            category,
+            description,
+            ingredients,
+            instructions,
+            prep_time,
+            cook_time,
+            servings,
+            difficulty,
+            tags,
+            image_url,
+        } = req.body;
         const cleanedName = typeof name === 'string' ? name.trim() : '';
         const cleanedCategory = typeof category === 'string' ? category.trim() : '';
         const cleanedIngredients = Array.isArray(ingredients) ? ingredients.filter(Boolean) : [];
         const cleanedInstructions = Array.isArray(instructions) ? instructions.filter(Boolean) : [];
 
-        if (!cleanedName || !cleanedCategory || cleanedIngredients.length === 0 || cleanedInstructions.length === 0) {
+        if (
+            !cleanedName ||
+            !cleanedCategory ||
+            cleanedIngredients.length === 0 ||
+            cleanedInstructions.length === 0
+        ) {
             return res.status(400).json({
                 success: false,
                 error: 'name, category, ingredients and instructions are required',
@@ -87,12 +109,14 @@ router.post('/', async (req: AuthRequest, res) => {
                 toNullIfEmpty(difficulty),
                 JSON.stringify(Array.isArray(tags) ? tags.filter(Boolean) : []),
                 toNullIfEmpty(image_url),
-            ]
+            ],
         );
 
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
-        console.error('Create recipe error:', error);
+        logger.error('recipes.create_recipe_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -101,14 +125,28 @@ router.post('/', async (req: AuthRequest, res) => {
 router.put('/:id', async (req: AuthRequest, res) => {
     try {
         const { id } = req.params;
-        const { name, category, description, ingredients, instructions, prep_time, cook_time, servings, difficulty, tags, image_url } = req.body;
+        const {
+            name,
+            category,
+            description,
+            ingredients,
+            instructions,
+            prep_time,
+            cook_time,
+            servings,
+            difficulty,
+            tags,
+            image_url,
+        } = req.body;
         const parsedPrepTime = prep_time !== undefined ? toOptionalNumber(prep_time) : undefined;
         const parsedCookTime = cook_time !== undefined ? toOptionalNumber(cook_time) : undefined;
         const parsedServings = servings !== undefined ? toOptionalNumber(servings) : undefined;
 
-        if ((prep_time !== undefined && parsedPrepTime === null)
-            || (cook_time !== undefined && parsedCookTime === null)
-            || (servings !== undefined && parsedServings === null)) {
+        if (
+            (prep_time !== undefined && parsedPrepTime === null) ||
+            (cook_time !== undefined && parsedCookTime === null) ||
+            (servings !== undefined && parsedServings === null)
+        ) {
             return res.status(400).json({ success: false, error: 'Invalid numeric value' });
         }
 
@@ -130,17 +168,25 @@ router.put('/:id', async (req: AuthRequest, res) => {
                 toNullIfEmpty(name),
                 toNullIfEmpty(category),
                 toNullIfEmpty(description),
-                ingredients !== undefined ? JSON.stringify(Array.isArray(ingredients) ? ingredients.filter(Boolean) : []) : null,
-                instructions !== undefined ? JSON.stringify(Array.isArray(instructions) ? instructions.filter(Boolean) : []) : null,
+                ingredients !== undefined
+                    ? JSON.stringify(Array.isArray(ingredients) ? ingredients.filter(Boolean) : [])
+                    : null,
+                instructions !== undefined
+                    ? JSON.stringify(
+                          Array.isArray(instructions) ? instructions.filter(Boolean) : [],
+                      )
+                    : null,
                 parsedPrepTime,
                 parsedCookTime,
                 parsedServings,
                 toNullIfEmpty(difficulty),
-                tags !== undefined ? JSON.stringify(Array.isArray(tags) ? tags.filter(Boolean) : []) : null,
+                tags !== undefined
+                    ? JSON.stringify(Array.isArray(tags) ? tags.filter(Boolean) : [])
+                    : null,
                 toNullIfEmpty(image_url),
                 id,
                 req.userId,
-            ]
+            ],
         );
 
         if (result.rows.length === 0) {
@@ -149,7 +195,9 @@ router.put('/:id', async (req: AuthRequest, res) => {
 
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
-        console.error('Update recipe error:', error);
+        logger.error('recipes.update_recipe_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
@@ -161,7 +209,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         const result = await query(
             'DELETE FROM recipes WHERE id = $1 AND user_id = $2 RETURNING id',
-            [id, req.userId]
+            [id, req.userId],
         );
 
         if (result.rows.length === 0) {
@@ -170,7 +218,9 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
         res.json({ success: true, message: 'Recipe deleted' });
     } catch (error) {
-        console.error('Delete recipe error:', error);
+        logger.error('recipes.delete_recipe_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });

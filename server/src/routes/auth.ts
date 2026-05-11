@@ -9,26 +9,14 @@ import {
     extractRefreshToken,
     verifyToken,
 } from '../middleware/auth';
+import { validate } from '../middleware/validate';
+import { loginBodySchema, registerBodySchema, updateCurrencyBodySchema } from '../schemas/auth';
 import { normalizeEmail } from '../lib/normalize';
+import logger from '../lib/logger';
 
-// Must stay in sync with shared/src/constants.ts SUPPORTED_CURRENCIES.
-const SUPPORTED_CURRENCY_CODES = new Set([
-    'EUR',
-    'USD',
-    'GBP',
-    'CHF',
-    'CAD',
-    'JPY',
-    'CNY',
-    'AUD',
-    'XOF',
-    'XAF',
-    'MAD',
-    'TND',
-    'DZD',
-    'BRL',
-    'INR',
-]);
+// The list of supported currencies now lives in schemas/auth.ts as a zod
+// enum (single source of truth) and remains synchronized with
+// shared/src/constants.ts SUPPORTED_CURRENCIES.
 
 const router = Router();
 
@@ -43,55 +31,53 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
 
         return res.json({ success: true, data: { user: result.rows[0] } });
     } catch (error) {
-        console.error('Get current user error:', error);
+        logger.error('auth.get_current_user_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         return res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
 
 // Update the authenticated user's preferred currency.
-router.patch('/me/currency', authMiddleware, async (req: AuthRequest, res) => {
-    try {
-        const { currency } = req.body ?? {};
-        if (typeof currency !== 'string' || !SUPPORTED_CURRENCY_CODES.has(currency)) {
-            return res.status(400).json({ success: false, error: 'Unsupported currency' });
+router.patch(
+    '/me/currency',
+    authMiddleware,
+    validate({ body: updateCurrencyBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const { currency } = req.body;
+
+            const result = await query(
+                'UPDATE users SET currency = $1 WHERE id = $2 RETURNING id, email, name, currency',
+                [currency, req.userId],
+            );
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'User not found' });
+            }
+
+            return res.json({ success: true, data: { user: result.rows[0] } });
+        } catch (error) {
+            logger.error('auth.update_currency_failed', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return res.status(500).json({ success: false, error: 'Internal server error' });
         }
-
-        const result = await query(
-            'UPDATE users SET currency = $1 WHERE id = $2 RETURNING id, email, name, currency',
-            [currency, req.userId],
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        return res.json({ success: true, data: { user: result.rows[0] } });
-    } catch (error) {
-        console.error('Update currency error:', error);
-        return res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-});
+    },
+);
 
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', validate({ body: registerBodySchema }), async (req, res) => {
     if (process.env.REGISTRATION_ENABLED === 'false') {
         return res.status(403).json({ success: false, error: 'Registration is disabled' });
     }
 
     try {
+        // Body shape and basic constraints (length, email format) are already
+        // enforced by the zod schema; we only re-normalize the email for
+        // case-insensitive lookups.
         const { email, password, name } = req.body;
-        const normalizedEmail = typeof email === 'string' ? normalizeEmail(email) : '';
-        const cleanedName = typeof name === 'string' ? name.trim() : '';
-
-        if (!normalizedEmail || !password || !cleanedName) {
-            return res.status(400).json({ success: false, error: 'Missing required fields' });
-        }
-
-        if (password.length < 8) {
-            return res
-                .status(400)
-                .json({ success: false, error: 'Password must be at least 8 characters' });
-        }
+        const normalizedEmail = normalizeEmail(email);
 
         // Check if user exists
         const existingUser = await query('SELECT id FROM users WHERE LOWER(email) = $1', [
@@ -107,7 +93,7 @@ router.post('/register', async (req, res) => {
         // Create user. `currency` is left NULL so the client prompts the user to pick one on first login.
         const result = await query(
             'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, currency',
-            [normalizedEmail, password_hash, cleanedName],
+            [normalizedEmail, password_hash, name],
         );
 
         const user = result.rows[0];
@@ -118,20 +104,18 @@ router.post('/register', async (req, res) => {
         // JavaScript (XSS). The client gets only non-sensitive user info.
         res.json({ success: true, data: { user } });
     } catch (error) {
-        console.error('Register error:', error);
+        logger.error('auth.register_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', validate({ body: loginBodySchema }), async (req, res) => {
     try {
         const { email, password } = req.body;
-        const normalizedEmail = typeof email === 'string' ? normalizeEmail(email) : '';
-
-        if (!normalizedEmail || !password) {
-            return res.status(400).json({ success: false, error: 'Missing required fields' });
-        }
+        const normalizedEmail = normalizeEmail(email);
 
         // Find user
         const result = await query('SELECT * FROM users WHERE LOWER(email) = $1', [
@@ -164,7 +148,9 @@ router.post('/login', async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('Login error:', error);
+        logger.error('auth.login_failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
