@@ -32,6 +32,12 @@ import {
     classifyShoppingItemSystemPrompt,
     parseShoppingNaturalLanguageSystemPrompt,
 } from './prompts/shoppingPrompts';
+import {
+    type ClothingKidInput,
+    buildClothingUserPrompt,
+    clothingSuggestionsSystemPrompt,
+} from './prompts/clothingPrompts';
+import type { WeatherSummary } from '../weather/WeatherService';
 
 let cachedProvider: BaseProvider | null = null;
 
@@ -334,6 +340,175 @@ const safeParseJson = (content: string | null): unknown => {
 
 // Re-export the type for callers that import from AIService.
 export type { ShoppingCategory } from './prompts/shoppingPrompts';
+
+// ---------------------------------------------------------------------------
+// Clothing suggestions for kids going to school (dashboard widget)
+// ---------------------------------------------------------------------------
+
+export interface ClothingSuggestion {
+    kidId: string;
+    top: string[];
+    bottom: string[];
+    footwear: string[];
+    accessories: string[];
+    advice: string;
+}
+
+export interface ClothingSuggestionsResult {
+    suggestions: ClothingSuggestion[];
+    cached: boolean;
+    model: string;
+}
+
+const CLOTHING_CACHE_TTL_MS = 30 * 60_000;
+
+interface ClothingCacheEntry {
+    at: number;
+    /** Suggestions stored without kidId (kidIds are remapped on read). */
+    template: Array<Omit<ClothingSuggestion, 'kidId'>>;
+    model: string;
+}
+
+/**
+ * In-memory cache keyed by (weather buckets × age buckets). Two parents in
+ * the same city with same-aged kids share an entry — the dashboard refresh
+ * costs zero tokens after the first call. Survives only the process; that's
+ * fine for v1 (the AI feature is a nice-to-have, not authoritative).
+ */
+const clothingCache = new Map<string, ClothingCacheEntry>();
+
+const ageBucket = (years: number): string => {
+    if (years < 4) return '0-3';
+    if (years < 7) return '4-6';
+    if (years < 11) return '7-10';
+    if (years < 15) return '11-14';
+    return '15+';
+};
+
+const clothingCacheKey = (weather: WeatherSummary, kids: ClothingKidInput[]): string =>
+    [
+        weather.tempMinBucket,
+        weather.precipBucket,
+        weather.windyBucket,
+        kids.map((k) => ageBucket(k.ageYears)).join(','),
+    ].join('|');
+
+const stringArray = (raw: unknown, max: number): string[] => {
+    if (!Array.isArray(raw)) return [];
+    const out: string[] = [];
+    for (const v of raw) {
+        if (out.length >= max) break;
+        if (typeof v !== 'string') continue;
+        const trimmed = v.trim();
+        if (trimmed) out.push(trimmed);
+    }
+    return out;
+};
+
+const sanitizeSuggestion = (raw: unknown, fallbackKidId: string): ClothingSuggestion | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const kidId = typeof r.kidId === 'string' && r.kidId.trim() ? r.kidId.trim() : fallbackKidId;
+    const advice = typeof r.advice === 'string' ? r.advice.trim().slice(0, 200) : '';
+    return {
+        kidId,
+        top: stringArray(r.top, 3),
+        bottom: stringArray(r.bottom, 3),
+        footwear: stringArray(r.footwear, 2),
+        accessories: stringArray(r.accessories, 4),
+        advice,
+    };
+};
+
+/**
+ * Generate a per-kid clothing suggestion for tomorrow morning. The AI sees
+ * a bucketed weather summary plus each kid's age and (private to the request)
+ * id; it returns one suggestion per kid in the same order.
+ *
+ * Caches by (weather buckets × age buckets) for 30 minutes. On a hit we
+ * remap the cached template to the current kidIds so the response always
+ * lines up with what the caller passed in.
+ */
+export const suggestClothingForKids = async (
+    weather: WeatherSummary,
+    kids: ClothingKidInput[],
+    ctx: { userId: string },
+): Promise<ClothingSuggestionsResult> => {
+    if (kids.length === 0) {
+        return { suggestions: [], cached: false, model: '' };
+    }
+
+    const key = clothingCacheKey(weather, kids);
+    const now = Date.now();
+    const hit = clothingCache.get(key);
+    if (hit && now - hit.at < CLOTHING_CACHE_TTL_MS && hit.template.length === kids.length) {
+        await recordInteraction({
+            userId: ctx.userId,
+            feature: 'dashboard.clothing_suggest',
+            model: hit.model,
+            promptTokens: 0,
+            completionTokens: 0,
+            latencyMs: null,
+            status: 'cached',
+        });
+        const suggestions = hit.template.map((tpl, i) => ({ ...tpl, kidId: kids[i].id }));
+        return { suggestions, cached: true, model: hit.model };
+    }
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: clothingSuggestionsSystemPrompt },
+                { role: 'user', content: buildClothingUserPrompt(weather, kids) },
+            ],
+            temperature: 0.4,
+            maxTokens: 600,
+            jsonMode: true,
+        },
+        { userId: ctx.userId, feature: 'dashboard.clothing_suggest' },
+    );
+
+    const parsed = safeParseJson(response.content);
+    const rawList = (parsed as { suggestions?: unknown } | null)?.suggestions;
+    if (!Array.isArray(rawList)) {
+        throw new AiError('BAD_JSON', 'Model did not return a "suggestions" array');
+    }
+
+    // Build a map by kidId for resilience: the model occasionally reorders.
+    const byId = new Map<string, ClothingSuggestion>();
+    for (let i = 0; i < rawList.length; i += 1) {
+        const fallback = kids[i]?.id ?? '';
+        const sanitized = sanitizeSuggestion(rawList[i], fallback);
+        if (sanitized) byId.set(sanitized.kidId, sanitized);
+    }
+
+    const suggestions: ClothingSuggestion[] = kids.map(
+        (k) =>
+            byId.get(k.id) ?? {
+                kidId: k.id,
+                top: [],
+                bottom: [],
+                footwear: [],
+                accessories: [],
+                advice: '',
+            },
+    );
+
+    // Store template (no kidId) so it survives across kids with the same age
+    // bucket distribution.
+    clothingCache.set(key, {
+        at: now,
+        template: suggestions.map(({ kidId: _kidId, ...rest }) => rest),
+        model: response.model,
+    });
+
+    return { suggestions, cached: false, model: response.model };
+};
+
+/** Test helper: clears the in-memory clothing-suggestion cache. */
+export const _resetClothingCache = (): void => {
+    clothingCache.clear();
+};
 
 /** Exposed for tests that swap in a mock provider. */
 export const setAiProviderForTests = (provider: BaseProvider | null): void => {

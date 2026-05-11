@@ -6,6 +6,10 @@ interface User {
     email: string;
     name: string;
     currency?: string | null;
+    city?: string | null;
+    country_code?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
 }
 
 interface AuthContextType {
@@ -16,6 +20,9 @@ interface AuthContextType {
     logout: () => Promise<void>;
     isAuthenticated: boolean;
     setUserCurrency: (currency: string) => Promise<void>;
+    // Replace the cached user atomically — used after PATCH /me/location so
+    // the dashboard widget sees the new city without refetching /me.
+    setUserFromServer: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -137,6 +144,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
+    const setUserFromServer = (next: User) => {
+        setUser(next);
+        writeCachedUser(next);
+    };
+
     return (
         <AuthContext.Provider
             value={{
@@ -147,6 +159,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 logout,
                 isAuthenticated: !!user,
                 setUserCurrency,
+                setUserFromServer,
             }}
         >
             {children}

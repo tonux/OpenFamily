@@ -52,6 +52,17 @@ export const updateCurrencyBodySchema = z
     })
     .strict();
 
+export const updateLocationBodySchema = z
+    .object({
+        city: z
+            .string()
+            .trim()
+            .min(1, { message: 'City is required' })
+            .max(120, { message: 'City is too long' }),
+    })
+    .strict();
+
 export type RegisterBody = z.infer<typeof registerBodySchema>;
 export type LoginBody = z.infer<typeof loginBodySchema>;
 export type UpdateCurrencyBody = z.infer<typeof updateCurrencyBodySchema>;
+export type UpdateLocationBody = z.infer<typeof updateLocationBodySchema>;

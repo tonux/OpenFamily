@@ -45,4 +45,9 @@ export const queryKeys = {
         items: () => [...queryKeys.shopping.all, 'items'] as const,
         templates: () => [...queryKeys.shopping.all, 'templates'] as const,
     },
+    dashboard: {
+        all: ['dashboard'] as const,
+        weatherClothing: (override: { latitude: number; longitude: number } | null) =>
+            [...queryKeys.dashboard.all, 'weather-clothing', override] as const,
+    },
 } as const;

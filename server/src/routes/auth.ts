@@ -10,9 +10,20 @@ import {
     verifyToken,
 } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import { loginBodySchema, registerBodySchema, updateCurrencyBodySchema } from '../schemas/auth';
+import {
+    loginBodySchema,
+    registerBodySchema,
+    updateCurrencyBodySchema,
+    updateLocationBodySchema,
+} from '../schemas/auth';
 import { normalizeEmail } from '../lib/normalize';
+import { geocodeCity } from '../weather/WeatherService';
+import { WeatherError } from '../weather/errors';
 import logger from '../lib/logger';
+
+// Columns returned to the client across /me, /login, /register, PATCH /me/*.
+// Centralising the projection avoids drift between endpoints.
+const USER_PUBLIC_COLUMNS = 'id, email, name, currency, city, country_code, latitude, longitude';
 
 // The list of supported currencies now lives in schemas/auth.ts as a zod
 // enum (single source of truth) and remains synchronized with
@@ -22,7 +33,7 @@ const router = Router();
 
 router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
     try {
-        const result = await query('SELECT id, email, name, currency FROM users WHERE id = $1', [
+        const result = await query(`SELECT ${USER_PUBLIC_COLUMNS} FROM users WHERE id = $1`, [
             req.userId,
         ]);
         if (result.rows.length === 0) {
@@ -48,7 +59,7 @@ router.patch(
             const { currency } = req.body;
 
             const result = await query(
-                'UPDATE users SET currency = $1 WHERE id = $2 RETURNING id, email, name, currency',
+                `UPDATE users SET currency = $1 WHERE id = $2 RETURNING ${USER_PUBLIC_COLUMNS}`,
                 [currency, req.userId],
             );
 
@@ -59,6 +70,50 @@ router.patch(
             return res.json({ success: true, data: { user: result.rows[0] } });
         } catch (error) {
             logger.error('auth.update_currency_failed', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return res.status(500).json({ success: false, error: 'Internal server error' });
+        }
+    },
+);
+
+// Update the authenticated user's saved location. The client sends a free-text
+// city; we geocode it via Open-Meteo and persist city + country + lat/lon.
+// Returning the full user lets the client refresh its AuthContext atomically.
+router.patch(
+    '/me/location',
+    authMiddleware,
+    validate({ body: updateLocationBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const { city } = req.body as { city: string };
+            const geocoded = await geocodeCity(city);
+            const result = await query(
+                `UPDATE users
+                 SET city = $1, country_code = $2, latitude = $3, longitude = $4
+                 WHERE id = $5
+                 RETURNING ${USER_PUBLIC_COLUMNS}`,
+                [
+                    geocoded.city,
+                    geocoded.country_code,
+                    geocoded.latitude,
+                    geocoded.longitude,
+                    req.userId,
+                ],
+            );
+            if (result.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'User not found' });
+            }
+            return res.json({ success: true, data: { user: result.rows[0] } });
+        } catch (error) {
+            if (error instanceof WeatherError) {
+                logger.warn('auth.update_location_failed', {
+                    code: error.code,
+                    message: error.message,
+                });
+                return res.status(error.status).json({ success: false, error: error.toJSON() });
+            }
+            logger.error('auth.update_location_unexpected', {
                 error: error instanceof Error ? error.message : String(error),
             });
             return res.status(500).json({ success: false, error: 'Internal server error' });
@@ -90,9 +145,13 @@ router.post('/register', validate({ body: registerBodySchema }), async (req, res
         // Hash password
         const password_hash = await bcrypt.hash(password, 10);
 
-        // Create user. `currency` is left NULL so the client prompts the user to pick one on first login.
+        // Create user. `currency` and location columns are left NULL so the
+        // client prompts on first login (currency dialog) and the dashboard
+        // widget shows its empty state until a city is set.
         const result = await query(
-            'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, currency',
+            `INSERT INTO users (email, password_hash, name)
+             VALUES ($1, $2, $3)
+             RETURNING ${USER_PUBLIC_COLUMNS}`,
             [normalizedEmail, password_hash, name],
         );
 
@@ -144,6 +203,10 @@ router.post('/login', validate({ body: loginBodySchema }), async (req, res) => {
                     email: user.email,
                     name: user.name,
                     currency: user.currency ?? null,
+                    city: user.city ?? null,
+                    country_code: user.country_code ?? null,
+                    latitude: user.latitude ?? null,
+                    longitude: user.longitude ?? null,
                 },
             },
         });

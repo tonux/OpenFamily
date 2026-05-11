@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { Download, Upload, CheckCircle, AlertCircle, Loader2, Coins } from 'lucide-react';
-import { Card, CardContent, Button, Select } from '../components/ui';
+import { Download, Upload, CheckCircle, AlertCircle, Loader2, Coins, MapPin } from 'lucide-react';
+import { Card, CardContent, Button, Input, Select } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { SUPPORTED_CURRENCIES, DEFAULT_CURRENCY } from '../lib/currencies';
+import { useUpdateUserLocation } from '../hooks/useDashboardWeather';
 
 const currencyOptions = SUPPORTED_CURRENCIES.map((c) => ({
     value: c.code,
@@ -35,7 +36,35 @@ const ENTITY_LABELS: Record<string, string> = {
 };
 
 const Settings: React.FC = () => {
-    const { user, setUserCurrency } = useAuth();
+    const { user, setUserCurrency, setUserFromServer } = useAuth();
+    const updateLocation = useUpdateUserLocation();
+    const [cityDraft, setCityDraft] = useState<string>(user?.city ?? '');
+    const [cityMessage, setCityMessage] = useState<{
+        kind: 'success' | 'error';
+        text: string;
+    } | null>(null);
+
+    const cityDirty = cityDraft.trim() !== '' && cityDraft.trim() !== (user?.city ?? '');
+
+    const handleSaveCity = async () => {
+        setCityMessage(null);
+        try {
+            const updated = await updateLocation.mutateAsync(cityDraft.trim());
+            setUserFromServer(updated);
+            setCityDraft(updated.city ?? '');
+            setCityMessage({
+                kind: 'success',
+                text: `Ville enregistrée : ${updated.city ?? cityDraft.trim()}.`,
+            });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Erreur lors de la mise à jour.';
+            const friendly = /CITY_NOT_FOUND/i.test(msg)
+                ? 'Ville introuvable — vérifie l’orthographe ou essaie une commune plus grande.'
+                : msg;
+            setCityMessage({ kind: 'error', text: friendly });
+        }
+    };
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [exportLoading, setExportLoading] = useState(false);
     const [exportError, setExportError] = useState('');
@@ -184,6 +213,64 @@ const Settings: React.FC = () => {
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 )}
                                 Enregistrer
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Location */}
+            <Card>
+                <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
+                            <MapPin className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="text-caption font-semibold text-foreground">Ville</h3>
+                            <p className="mt-1 text-micro text-muted-foreground">
+                                Utilisée pour la météo de demain et les suggestions de tenues sur le
+                                dashboard. Renseigne le nom d'une ville (ex : Lyon, Montréal, Dakar)
+                                — la localisation sera trouvée automatiquement.
+                            </p>
+                            <div className="mt-4 max-w-sm">
+                                <Input
+                                    value={cityDraft}
+                                    onChange={(e) => setCityDraft(e.target.value)}
+                                    placeholder="Ex: Paris"
+                                />
+                            </div>
+                            {user?.city && (
+                                <p className="mt-2 text-micro text-muted-foreground">
+                                    Actuel : {user.city}
+                                    {user.country_code ? ` (${user.country_code})` : ''}
+                                </p>
+                            )}
+                            {cityMessage && (
+                                <p
+                                    className={`mt-2 flex items-center gap-1 text-micro ${
+                                        cityMessage.kind === 'error'
+                                            ? 'text-destructive'
+                                            : 'text-emerald-600'
+                                    }`}
+                                >
+                                    {cityMessage.kind === 'error' ? (
+                                        <AlertCircle className="h-4 w-4" />
+                                    ) : (
+                                        <CheckCircle className="h-4 w-4" />
+                                    )}
+                                    {cityMessage.text}
+                                </p>
+                            )}
+                            <Button
+                                className="mt-4"
+                                onClick={handleSaveCity}
+                                disabled={!cityDirty || updateLocation.isPending}
+                            >
+                                {updateLocation.isPending && (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                )}
+                                Enregistrer la ville
                             </Button>
                         </div>
                     </div>

@@ -1,9 +1,21 @@
 import { Router } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import { AIService, classifyShoppingItem, parseShoppingNaturalLanguage } from '../ai/AIService';
+import {
+    AIService,
+    classifyShoppingItem,
+    parseShoppingNaturalLanguage,
+    suggestClothingForKids,
+} from '../ai/AIService';
 import { AiError } from '../ai/errors';
-import { classifyShoppingItemBodySchema, parseShoppingNLBodySchema } from '../schemas/ai';
+import {
+    classifyShoppingItemBodySchema,
+    clothingSuggestionsBodySchema,
+    parseShoppingNLBodySchema,
+} from '../schemas/ai';
+import { query } from '../db';
+import { getTomorrowForecast, summarize } from '../weather/WeatherService';
+import { WeatherError } from '../weather/errors';
 import logger from '../lib/logger';
 
 const router = Router();
@@ -87,6 +99,165 @@ router.post(
             res.json({ success: true, data: { items } });
         } catch (error) {
             sendAiError(res, error, 'shopping_parse');
+        }
+    },
+);
+
+/**
+ * POST /api/ai/dashboard/clothing-suggestions
+ * Body: { latitude?: number, longitude?: number }   (override coords)
+ *
+ * Aggregates tomorrow's forecast for the user's saved (or overridden) city,
+ * the list of children, and an AI-generated clothing suggestion per child.
+ *
+ * Degraded paths return 200 with a typed `code` so the widget can render a
+ * partial state without an error banner:
+ *   - NO_LOCATION   → user has no city saved and no override sent
+ *   - DISABLED      → AI feature toggle off; weather + kids still returned
+ *   - QUOTA_EXCEEDED→ same
+ *   - BAD_JSON      → model returned garbage; weather + kids still returned
+ * Hard failures (weather provider down, etc.) bubble through `sendAiError`.
+ */
+const ageYearsFromBirthDate = (birthDate: unknown, fallback: number): number => {
+    if (!(birthDate instanceof Date) && typeof birthDate !== 'string') return fallback;
+    const d = birthDate instanceof Date ? birthDate : new Date(`${birthDate}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return fallback;
+    const now = new Date();
+    let age = now.getFullYear() - d.getFullYear();
+    const before =
+        now.getMonth() < d.getMonth() ||
+        (now.getMonth() === d.getMonth() && now.getDate() < d.getDate());
+    if (before) age -= 1;
+    return Math.max(0, Math.min(120, age));
+};
+
+router.post(
+    '/dashboard/clothing-suggestions',
+    validate({ body: clothingSuggestionsBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            // 1. Resolve coordinates: override > saved.
+            let latitude: number | null =
+                typeof req.body.latitude === 'number' ? req.body.latitude : null;
+            let longitude: number | null =
+                typeof req.body.longitude === 'number' ? req.body.longitude : null;
+            let cityLabel: string | null = null;
+
+            const userRow = await query(
+                'SELECT city, latitude, longitude FROM users WHERE id = $1',
+                [req.userId],
+            );
+            const u = userRow.rows[0] as
+                | {
+                      city: string | null;
+                      latitude: string | number | null;
+                      longitude: string | number | null;
+                  }
+                | undefined;
+
+            if (latitude === null || longitude === null) {
+                if (u && u.latitude !== null && u.longitude !== null) {
+                    latitude = Number(u.latitude);
+                    longitude = Number(u.longitude);
+                    cityLabel = u.city ?? null;
+                } else {
+                    return res.status(400).json({
+                        success: false,
+                        error: { code: 'NO_LOCATION', message: 'No saved location' },
+                    });
+                }
+            }
+
+            // 2. Forecast.
+            let weather;
+            let summary;
+            try {
+                weather = await getTomorrowForecast(latitude!, longitude!);
+                summary = summarize(weather);
+            } catch (err) {
+                if (err instanceof WeatherError) {
+                    logger.warn('ai.clothing.weather_failed', {
+                        code: err.code,
+                        message: err.message,
+                    });
+                    return res.status(err.status).json({ success: false, error: err.toJSON() });
+                }
+                throw err;
+            }
+
+            // 3. Kids (role='Enfant').
+            const kidsRow = await query(
+                `SELECT id, name, birth_date, color
+                 FROM family_members
+                 WHERE user_id = $1 AND role = 'Enfant'
+                 ORDER BY birth_date NULLS LAST, name ASC`,
+                [req.userId],
+            );
+            const kids = kidsRow.rows.map((r: any) => ({
+                id: r.id as string,
+                name: r.name as string,
+                color: r.color as string,
+                birth_date: r.birth_date as string | null,
+                ageYears: ageYearsFromBirthDate(r.birth_date, 8),
+            }));
+
+            const baseResponse = {
+                weather,
+                city: cityLabel,
+                kids,
+            };
+
+            if (kids.length === 0) {
+                return res.json({
+                    success: true,
+                    data: { ...baseResponse, suggestions: [], cached: false, model: '' },
+                });
+            }
+
+            // 4. AI suggestion. Degrade gracefully on disabled/quota/bad-json.
+            try {
+                const ai = await suggestClothingForKids(
+                    summary,
+                    kids.map((k) => ({
+                        id: k.id,
+                        firstName: k.name.split(' ')[0] ?? k.name,
+                        ageYears: k.ageYears,
+                    })),
+                    { userId: req.userId! },
+                );
+                return res.json({
+                    success: true,
+                    data: {
+                        ...baseResponse,
+                        suggestions: ai.suggestions,
+                        cached: ai.cached,
+                        model: ai.model,
+                    },
+                });
+            } catch (err) {
+                if (
+                    err instanceof AiError &&
+                    (err.code === 'DISABLED' ||
+                        err.code === 'QUOTA_EXCEEDED' ||
+                        err.code === 'BAD_JSON')
+                ) {
+                    logger.info('ai.clothing.degraded', { code: err.code });
+                    return res.json({
+                        success: true,
+                        data: {
+                            ...baseResponse,
+                            suggestions: [],
+                            cached: false,
+                            model: '',
+                            aiUnavailable: true,
+                            code: err.code,
+                        },
+                    });
+                }
+                throw err;
+            }
+        } catch (error) {
+            sendAiError(res, error, 'dashboard_clothing');
         }
     },
 );

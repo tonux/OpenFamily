@@ -60,6 +60,12 @@ services:
       AI_MONTHLY_TOKEN_LIMIT_PER_USER: ${AI_MONTHLY_TOKEN_LIMIT_PER_USER:-2000000}
       AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-30000}
       AI_STREAMING_ENABLED: ${AI_STREAMING_ENABLED:-true}
+      # Weather (Open-Meteo, key-less) — dashboard widget météo + suggestions IA
+      OPEN_METEO_BASE_URL: ${OPEN_METEO_BASE_URL:-https://api.open-meteo.com/v1/forecast}
+      OPEN_METEO_GEOCODING_URL: ${OPEN_METEO_GEOCODING_URL:-https://geocoding-api.open-meteo.com/v1/search}
+      WEATHER_CACHE_TTL_MS: ${WEATHER_CACHE_TTL_MS:-600000}
+      WEATHER_REQUEST_TIMEOUT_MS: ${WEATHER_REQUEST_TIMEOUT_MS:-8000}
+      WEATHER_DEFAULT_LANG: ${WEATHER_DEFAULT_LANG:-fr}
     ports:
       - '3001:3001'
     depends_on:
