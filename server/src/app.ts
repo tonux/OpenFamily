@@ -16,6 +16,7 @@ import dashboardRoutes from './routes/dashboard';
 import planningRoutes from './routes/planning';
 import dataTransferRoutes from './routes/dataTransfer';
 import aiRoutes from './routes/ai';
+import weatherRoutes from './routes/weather';
 import { loadEnv } from './config/loadEnv';
 import logger from './lib/logger';
 
@@ -142,6 +143,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/planning', planningRoutes);
 app.use('/api/data', dataTransferRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/weather', weatherRoutes);
 
 // 404 handler
 app.use((req, res) => {

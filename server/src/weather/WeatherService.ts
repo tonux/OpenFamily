@@ -283,6 +283,170 @@ export const getTomorrowForecast = async (
     return forecast;
 };
 
+// ---------------------------------------------------------------------------
+// Weekly forecast — used by the dashboard "weather details" modal. Carries
+// more fields than TomorrowForecast (sunrise/sunset, UV, humidity proxy via
+// apparent_temperature) so the dialog can show a richer breakdown without
+// triggering a second Open-Meteo round-trip.
+// ---------------------------------------------------------------------------
+
+export interface DailyForecast {
+    date: string;
+    tempMin: number;
+    tempMax: number;
+    apparentTempMin: number;
+    apparentTempMax: number;
+    precipitationMm: number;
+    precipitationProbability: number;
+    windSpeedMax: number;
+    weatherCode: number;
+    label: string;
+    sunrise: string | null;
+    sunset: string | null;
+    uvIndexMax: number | null;
+}
+
+export interface WeeklyForecast {
+    days: DailyForecast[];
+    timezone: string;
+}
+
+interface WeeklyCacheEntry {
+    value: WeeklyForecast;
+    expiresAt: number;
+}
+const weeklyCache = new Map<string, WeeklyCacheEntry>();
+
+const weeklyCacheKey = (lat: number, lon: number, days: number): string =>
+    `${lat.toFixed(2)},${lon.toFixed(2)}:${days}`;
+
+/**
+ * Fetch a `days`-day daily forecast for the given coordinates. Cached briefly
+ * in-process. Independent from the `getTomorrowForecast` cache because the
+ * shape and the requested day count differ.
+ */
+export const getWeeklyForecast = async (
+    latitude: number,
+    longitude: number,
+    days = 7,
+): Promise<WeeklyForecast> => {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        throw new WeatherError('BAD_REQUEST', 'latitude and longitude must be finite numbers');
+    }
+    const safeDays = Math.max(1, Math.min(16, Math.floor(days)));
+
+    const cfg = getWeatherConfig();
+    const key = weeklyCacheKey(latitude, longitude, safeDays);
+    const now = Date.now();
+    const hit = weeklyCache.get(key);
+    if (hit && hit.expiresAt > now) {
+        return hit.value;
+    }
+
+    const url = new URL(cfg.forecastBaseUrl);
+    url.searchParams.set('latitude', latitude.toString());
+    url.searchParams.set('longitude', longitude.toString());
+    url.searchParams.set(
+        'daily',
+        [
+            'temperature_2m_max',
+            'temperature_2m_min',
+            'apparent_temperature_max',
+            'apparent_temperature_min',
+            'precipitation_sum',
+            'precipitation_probability_max',
+            'weathercode',
+            'windspeed_10m_max',
+            'sunrise',
+            'sunset',
+            'uv_index_max',
+        ].join(','),
+    );
+    url.searchParams.set('timezone', 'auto');
+    url.searchParams.set('forecast_days', String(safeDays));
+
+    interface DailyBlock {
+        time?: unknown;
+        temperature_2m_min?: unknown;
+        temperature_2m_max?: unknown;
+        apparent_temperature_min?: unknown;
+        apparent_temperature_max?: unknown;
+        precipitation_sum?: unknown;
+        precipitation_probability_max?: unknown;
+        weathercode?: unknown;
+        windspeed_10m_max?: unknown;
+        sunrise?: unknown;
+        sunset?: unknown;
+        uv_index_max?: unknown;
+    }
+    const data = (await fetchJsonWithTimeout(url.toString(), cfg.requestTimeoutMs)) as {
+        daily?: DailyBlock;
+        timezone?: unknown;
+    } | null;
+
+    const daily = data?.daily;
+    if (
+        !daily ||
+        !Array.isArray(daily.time) ||
+        daily.time.length === 0 ||
+        !Array.isArray(daily.temperature_2m_min) ||
+        !Array.isArray(daily.temperature_2m_max)
+    ) {
+        throw new WeatherError('PROVIDER_ERROR', 'Open-Meteo response missing daily fields');
+    }
+
+    const at = <T>(arr: unknown, i: number, fallback: T): T => {
+        if (Array.isArray(arr) && i < arr.length) {
+            const v = arr[i];
+            if (v !== null && v !== undefined && typeof v === typeof fallback) return v as T;
+        }
+        return fallback;
+    };
+    const atString = (arr: unknown, i: number): string | null => {
+        if (Array.isArray(arr) && i < arr.length) {
+            const v = arr[i];
+            if (typeof v === 'string' && v.length > 0) return v;
+        }
+        return null;
+    };
+    const atNumberOrNull = (arr: unknown, i: number): number | null => {
+        if (Array.isArray(arr) && i < arr.length) {
+            const v = arr[i];
+            if (typeof v === 'number' && Number.isFinite(v)) return v;
+        }
+        return null;
+    };
+
+    const dayCount = Math.min(safeDays, daily.time.length);
+    const out: DailyForecast[] = [];
+    for (let i = 0; i < dayCount; i += 1) {
+        const code = at<number>(daily.weathercode, i, 0);
+        out.push({
+            date: String(daily.time[i]),
+            tempMin: at<number>(daily.temperature_2m_min, i, 0),
+            tempMax: at<number>(daily.temperature_2m_max, i, 0),
+            apparentTempMin: at<number>(daily.apparent_temperature_min, i, 0),
+            apparentTempMax: at<number>(daily.apparent_temperature_max, i, 0),
+            precipitationMm: at<number>(daily.precipitation_sum, i, 0),
+            precipitationProbability: at<number>(daily.precipitation_probability_max, i, 0),
+            windSpeedMax: at<number>(daily.windspeed_10m_max, i, 0),
+            weatherCode: code,
+            label: labelForCode(code),
+            sunrise: atString(daily.sunrise, i),
+            sunset: atString(daily.sunset, i),
+            uvIndexMax: atNumberOrNull(daily.uv_index_max, i),
+        });
+    }
+
+    const result: WeeklyForecast = {
+        days: out,
+        timezone: typeof data?.timezone === 'string' ? data.timezone : 'UTC',
+    };
+    weeklyCache.set(key, { value: result, expiresAt: now + cfg.cacheTtlMs });
+    logger.debug('weather.weekly_fetched', { key, days: out.length });
+    return result;
+};
+
 /**
  * Bucket a TomorrowForecast into the qualitative dimensions the AI prompt
  * uses. Same shape powers the AI cache key, so similar weather across the
@@ -317,7 +481,8 @@ export const summarize = (f: TomorrowForecast): WeatherSummary => {
     };
 };
 
-/** Test helper: clears the in-memory forecast cache. */
+/** Test helper: clears the in-memory forecast caches. */
 export const _resetWeatherCache = (): void => {
     forecastCache.clear();
+    weeklyCache.clear();
 };

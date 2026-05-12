@@ -50,4 +50,9 @@ export const queryKeys = {
         weatherClothing: (override: { latitude: number; longitude: number } | null) =>
             [...queryKeys.dashboard.all, 'weather-clothing', override] as const,
     },
+    weather: {
+        all: ['weather'] as const,
+        weekly: (override: { latitude: number; longitude: number } | null, days: number) =>
+            [...queryKeys.weather.all, 'weekly', override, days] as const,
+    },
 } as const;

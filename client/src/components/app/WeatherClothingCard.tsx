@@ -25,6 +25,7 @@ import {
     type ClothingSuggestionDTO,
     type ForecastDTO,
 } from '../../hooks/useDashboardWeather';
+import WeatherDetailsDialog from './WeatherDetailsDialog';
 
 // =============================================================================
 // WeatherClothingCard
@@ -76,6 +77,7 @@ const WeatherClothingCard: React.FC = () => {
     const { showToast } = useToast();
     const [override, setOverride] = useState<{ latitude: number; longitude: number } | null>(null);
     const [locating, setLocating] = useState(false);
+    const [detailsOpen, setDetailsOpen] = useState(false);
 
     // Don't fire the request when we know up-front there's no city saved AND
     // no override — the empty state CTA is enough.
@@ -231,7 +233,7 @@ const WeatherClothingCard: React.FC = () => {
 
                 {/* Body */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <WeatherTile forecast={data.weather} />
+                    <WeatherTile forecast={data.weather} onClick={() => setDetailsOpen(true)} />
 
                     <div className="lg:col-span-2">
                         {data.kids.length === 0 ? (
@@ -246,6 +248,13 @@ const WeatherClothingCard: React.FC = () => {
                     </div>
                 </div>
             </CardContent>
+            <WeatherDetailsDialog
+                open={detailsOpen}
+                onOpenChange={setDetailsOpen}
+                tomorrow={data.weather}
+                cityLabel={override ? 'Position actuelle' : data.city}
+                override={override}
+            />
         </Card>
     );
 };
@@ -275,13 +284,29 @@ const EmptyShell: React.FC<{
     </Card>
 );
 
-const WeatherTile: React.FC<{ forecast: ForecastDTO }> = ({ forecast }) => {
+const WeatherTile: React.FC<{ forecast: ForecastDTO; onClick?: () => void }> = ({
+    forecast,
+    onClick,
+}) => {
     const Icon = weatherIconFor(forecast.weatherCode);
     return (
-        <div className="rounded-card border border-border bg-gradient-to-br from-blue-50 to-cyan-50 p-4">
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={!onClick}
+            className="text-left rounded-card border border-border bg-gradient-to-br from-blue-50 to-cyan-50 p-4 transition-all hover:shadow-surface hover:border-primary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default"
+            aria-label="Voir le détail météo de la semaine"
+        >
             <div className="flex items-start justify-between">
                 <div>
-                    <p className="text-label text-muted-foreground">Demain</p>
+                    <p className="text-label text-muted-foreground flex items-center gap-1">
+                        Demain
+                        {onClick && (
+                            <span className="text-[10px] italic text-primary/70">
+                                · cliquer pour la semaine
+                            </span>
+                        )}
+                    </p>
                     <p className="text-h2 font-semibold text-foreground">{forecast.label}</p>
                 </div>
                 <Icon className="h-12 w-12 text-nexus-blue" />
@@ -312,7 +337,7 @@ const WeatherTile: React.FC<{ forecast: ForecastDTO }> = ({ forecast }) => {
                     </div>
                 </div>
             </div>
-        </div>
+        </button>
     );
 };
 

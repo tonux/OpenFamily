@@ -115,8 +115,64 @@ export const useUpdateUserLocation = () => {
             return response.data.user;
         },
         onSuccess: () => {
-            // Force a refetch of the widget with the new coordinates.
+            // Force a refetch of the widget AND any open weather details.
             queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.weather.all });
+        },
+    });
+};
+
+// ---------------------------------------------------------------------------
+// Weekly forecast (used by the "weather details" modal)
+// ---------------------------------------------------------------------------
+
+export interface DailyForecastDTO {
+    date: string;
+    tempMin: number;
+    tempMax: number;
+    apparentTempMin: number;
+    apparentTempMax: number;
+    precipitationMm: number;
+    precipitationProbability: number;
+    windSpeedMax: number;
+    weatherCode: number;
+    label: string;
+    sunrise: string | null;
+    sunset: string | null;
+    uvIndexMax: number | null;
+}
+
+export interface WeeklyForecastDTO {
+    days: DailyForecastDTO[];
+    timezone: string;
+    city: string | null;
+}
+
+/**
+ * Fetch the multi-day forecast for the currently effective coordinates.
+ * Mirrors the override semantics of `useDashboardWeather` so the user's
+ * geolocation toggle on the dashboard widget also drives the details modal.
+ */
+export const useWeeklyForecast = (
+    override: { latitude: number; longitude: number } | null,
+    options?: { enabled?: boolean; days?: number },
+) => {
+    const days = options?.days ?? 7;
+    return useQuery({
+        queryKey: queryKeys.weather.weekly(override, days),
+        queryFn: async () => {
+            const response = await api.post<{ success: boolean; data: WeeklyForecastDTO }>(
+                '/api/weather/forecast',
+                { ...(override ?? {}), days },
+            );
+            return response.data;
+        },
+        staleTime: 10 * 60_000,
+        enabled: options?.enabled ?? true,
+        retry: (count, error) => {
+            const msg = error instanceof Error ? error.message : '';
+            if (/NO_LOCATION|HTTP 4\d\d/i.test(msg)) return false;
+            return count < 1;
         },
     });
 };
