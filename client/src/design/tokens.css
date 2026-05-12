@@ -1,134 +1,170 @@
+/* =============================================================================
+ * Design tokens — palette "Famille pop" (mauve doux + menthe + miel)
+ *
+ * - Primary : mauve doux (#8E6FB6) — original, peu d'apps l'utilisent
+ * - Accent  : menthe (#A4D4AE) — apaisant, optimiste
+ * - Backgrounds chauds (coquille / crème), jamais blanc pur
+ * - Foregrounds en aubergine nuit, jamais noir pur
+ * - Soft variants pour chaque sémantique (success/warning/destructive/info)
+ *   pour remplacer les hard-codés `bg-emerald-50` / `bg-amber-50` / etc.
+ *
+ * Convention : RGB en triplets espace-séparés pour Tailwind
+ * `rgb(var(--token) / <alpha-value>)`.
+ * ============================================================================= */
+
 :root {
-  color-scheme: light;
+    color-scheme: light;
 
-  /* Base tokens (hex) */
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f7f7f7;
-  --border-base: #e8e8e8;
-  --border-strong-base: #d8d8d8;
-  --text-base: #222222;
-  --text-muted-base: #717171;
+    /* Base tokens (hex) — kept for any consumer reading them directly. */
+    --bg: #fbfaf6;
+    --surface: #ffffff;
+    --surface-2: #efede5;
+    --border-base: #e5e1da;
+    --border-strong-base: #d6d1c5;
+    --text-base: #2c2438;
+    --text-muted-base: #7c7388;
 
-  --primary-base: #ff4466;
-  --primary-hover-base: #e93a60;
-  --primary-pressed-base: #d9325a;
-  --primary-soft-base: #fff1f4;
+    --primary-base: #8e6fb6;
+    --primary-hover-base: #7e5ea7;
+    --primary-pressed-base: #6e4f96;
+    --primary-soft-base: #f1ecf8;
 
-  --success-base: #16a34a;
-  --warning-base: #f59e0b;
-  --danger-base: #dc2626;
-  --info-base: #2563eb;
+    --success-base: #6fb58f;
+    --warning-base: #f5c546;
+    --danger-base: #e36571;
+    --info-base: #6593c2;
 
-  /* RGB tokens for Tailwind rgb(var(--token) / alpha) */
-  --background: 255 255 255;
-  --foreground: 34 34 34;
-  --card: 255 255 255;
-  --card-foreground: 34 34 34;
-  --popover: 255 255 255;
-  --popover-foreground: 34 34 34;
+    /* RGB tokens for Tailwind rgb(var(--token) / alpha) */
+    --background: 251 250 246; /* coquille (chaud) */
+    --foreground: 44 36 56; /* aubergine nuit */
+    --card: 255 255 255; /* cards posées sur background coquille */
+    --card-foreground: 44 36 56;
+    --popover: 255 255 255;
+    --popover-foreground: 44 36 56;
 
-  --surface-rgb: 255 255 255;
-  --surface-2-rgb: 247 247 247;
+    --surface-rgb: 251 250 246;
+    --surface-2-rgb: 239 237 229;
 
-  --primary: 255 68 102;
-  --primary-foreground: 255 255 255;
-  --primary-hover: 233 58 96;
-  --primary-pressed: 217 50 90;
-  --primary-soft: 255 241 244;
+    --primary: 142 111 182; /* #8E6FB6 mauve doux */
+    --primary-foreground: 255 255 255;
+    --primary-hover: 126 94 167;
+    --primary-pressed: 110 79 150;
+    --primary-soft: 241 236 248; /* tint mauve très clair pour bg subtil */
 
-  --secondary: 247 247 247;
-  --secondary-foreground: 34 34 34;
-  --muted: 247 247 247;
-  --muted-foreground: 113 113 113;
-  --accent: 255 241 244;
-  --accent-foreground: 255 68 102;
+    --secondary: 239 237 229; /* = surface-2 */
+    --secondary-foreground: 44 36 56;
+    --muted: 245 243 237;
+    --muted-foreground: 124 115 136; /* bruyère gris-mauve */
 
-  --destructive: 220 38 38;
-  --destructive-foreground: 255 255 255;
+    /* Accent = menthe : utilisé comme couleur de soutien (sapin clair vivant) */
+    --accent: 164 212 174;
+    --accent-soft: 232 243 236;
+    --accent-foreground: 31 58 40;
 
-  --success: 22 163 74;
-  --warning: 245 158 11;
-  --danger: 220 38 38;
-  --info: 37 99 235;
+    /* Destructive = corail doux (pas un rouge alarmant) */
+    --destructive: 227 101 113;
+    --destructive-foreground: 255 255 255;
+    --destructive-soft: 251 227 229;
 
-  --border: 232 232 232;
-  --border-strong: 216 216 216;
-  --input: 232 232 232;
-  --ring: 255 68 102;
+    /* Sémantiques + leurs soft variants (pour remplacer les bg-X-50 hard-codés) */
+    --success: 111 181 143;
+    --success-soft: 224 240 230;
+    --warning: 245 197 70; /* miel solaire */
+    --warning-soft: 252 243 210;
+    --danger: 227 101 113; /* alias historique = destructive */
+    --danger-soft: 251 227 229;
+    --info: 101 147 194; /* bleuet, complémentaire au mauve */
+    --info-soft: 225 236 246;
 
-  --radius: 12px;
-  --radius-card: 16px;
-  --radius-input: 12px;
-  --radius-pill: 999px;
+    --border: 229 225 218; /* lin */
+    --border-strong: 214 209 197;
+    --input: 229 225 218;
+    --ring: 142 111 182; /* anneau focus = primary */
 
-  --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-surface-hover: 0 6px 20px rgba(0, 0, 0, 0.1);
+    --radius: 12px;
+    --radius-card: 16px;
+    --radius-input: 12px;
+    --radius-pill: 999px;
 
-  --motion-fast: 160ms;
-  --motion-base: 240ms;
-  --ease-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --shadow-surface: 0 1px 2px rgba(44, 36, 56, 0.06);
+    --shadow-surface-hover: 0 6px 20px rgba(44, 36, 56, 0.1);
+
+    --motion-fast: 160ms;
+    --motion-base: 240ms;
+    --ease-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .dark {
-  color-scheme: dark;
+    color-scheme: dark;
 
-  --bg: #0f0f10;
-  --surface: #161618;
-  --surface-2: #1c1c1f;
-  --border-base: #2a2a2e;
-  --border-strong-base: #38383f;
-  --text-base: #fafafa;
-  --text-muted-base: #b5b5b8;
+    --bg: #1c1729;
+    --surface: #251e33;
+    --surface-2: #2a2342;
+    --border-base: #3a2f4d;
+    --border-strong-base: #4a3d62;
+    --text-base: #ece7dc;
+    --text-muted-base: #9a91a8;
 
-  --primary-base: #ff5a7a;
-  --primary-hover-base: #f24f70;
-  --primary-pressed-base: #e24466;
-  --primary-soft-base: #2a121a;
+    --primary-base: #b399d9; /* mauve plus brillant pour contraste */
+    --primary-hover-base: #c0aae0;
+    --primary-pressed-base: #a387c9;
+    --primary-soft-base: #2d1f44;
 
-  --background: 15 15 16;
-  --foreground: 250 250 250;
-  --card: 22 22 24;
-  --card-foreground: 250 250 250;
-  --popover: 22 22 24;
-  --popover-foreground: 250 250 250;
+    --success-base: #91c9a8;
+    --warning-base: #f8d374;
+    --danger-base: #e88a93;
+    --info-base: #84aed8;
 
-  --surface-rgb: 22 22 24;
-  --surface-2-rgb: 28 28 31;
+    --background: 28 23 41; /* nuit aubergine */
+    --foreground: 236 231 220; /* crème (≠ blanc pur) */
+    --card: 37 30 51;
+    --card-foreground: 236 231 220;
+    --popover: 37 30 51;
+    --popover-foreground: 236 231 220;
 
-  --primary: 255 90 122;
-  --primary-foreground: 255 255 255;
-  --primary-hover: 242 79 112;
-  --primary-pressed: 226 68 102;
-  --primary-soft: 42 18 26;
+    --surface-rgb: 37 30 51;
+    --surface-2-rgb: 42 35 66;
 
-  --secondary: 28 28 31;
-  --secondary-foreground: 250 250 250;
-  --muted: 28 28 31;
-  --muted-foreground: 181 181 184;
-  --accent: 42 18 26;
-  --accent-foreground: 255 90 122;
+    --primary: 179 153 217; /* #B399D9 */
+    --primary-foreground: 28 23 41;
+    --primary-hover: 192 170 224;
+    --primary-pressed: 163 135 201;
+    --primary-soft: 45 31 68;
 
-  --destructive: 239 68 68;
-  --destructive-foreground: 255 255 255;
+    --secondary: 42 35 66;
+    --secondary-foreground: 236 231 220;
+    --muted: 46 38 63;
+    --muted-foreground: 154 145 168;
 
-  --success: 34 197 94;
-  --warning: 245 158 11;
-  --danger: 239 68 68;
-  --info: 96 165 250;
+    --accent: 184 224 190; /* menthe brillante */
+    --accent-soft: 31 58 40;
+    --accent-foreground: 184 224 190;
 
-  --border: 42 42 46;
-  --border-strong: 56 56 63;
-  --input: 42 42 46;
-  --ring: 255 90 122;
+    --destructive: 232 138 147; /* corail brillant */
+    --destructive-foreground: 28 23 41;
+    --destructive-soft: 60 28 34;
 
-  --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-surface-hover: 0 8px 28px rgba(0, 0, 0, 0.45);
+    --success: 145 201 168;
+    --success-soft: 27 50 38;
+    --warning: 248 211 116;
+    --warning-soft: 60 46 18;
+    --danger: 232 138 147;
+    --danger-soft: 60 28 34;
+    --info: 132 174 216;
+    --info-soft: 24 40 60;
+
+    --border: 58 47 77;
+    --border-strong: 74 61 98;
+    --input: 58 47 77;
+    --ring: 179 153 217;
+
+    --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-surface-hover: 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root {
-    --motion-fast: 1ms;
-    --motion-base: 1ms;
-  }
+    :root {
+        --motion-fast: 1ms;
+        --motion-base: 1ms;
+    }
 }

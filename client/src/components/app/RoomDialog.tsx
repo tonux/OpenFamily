@@ -13,17 +13,19 @@ import {
 } from '../../hooks/useHouse';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
-// Default colors picked to be visually distinguishable in a swatch row.
+// Room palette aligned with the Famille pop charter (mauve / menthe / miel /
+// corail / bleuet …). Keep 9 swatches so the picker fills a single row on
+// mobile.
 const ROOM_COLORS = [
-    '#3B82F6', // blue
-    '#10B981', // emerald
-    '#F59E0B', // amber
-    '#EF4444', // red
-    '#8B5CF6', // violet
-    '#EC4899', // pink
-    '#06B6D4', // cyan
-    '#84CC16', // lime
-    '#6B7280', // gray
+    '#8E6FB6', // mauve (primary)
+    '#6FB58F', // menthe
+    '#F5C546', // miel
+    '#E36571', // corail
+    '#6593C2', // bleuet
+    '#B399D9', // lavande
+    '#F4A28C', // saumon
+    '#95B79E', // sauge
+    '#D9A05B', // caramel
 ];
 
 interface Props {

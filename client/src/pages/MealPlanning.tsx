@@ -21,6 +21,7 @@ import {
     subDays,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { mealTypeGradient } from '../design/colorPresets';
 
 interface FamilyMember {
     id: string;
@@ -322,22 +323,12 @@ const MealPlanning: React.FC = () => {
         );
     };
 
-    const getMealTypeColor = (mealType: string) => {
-        switch (mealType) {
-            case 'Petit-déjeuner':
-                return 'from-amber-50 to-orange-50 border-amber-200';
-            case 'Déjeuner':
-                return 'from-blue-50 to-cyan-50 border-blue-200';
-            case 'Dîner':
-                return 'from-purple-50 to-pink-50 border-purple-200';
-            case 'Snack':
-                return 'from-emerald-50 to-teal-50 border-emerald-200';
-            case LUNCHBOX_TYPE:
-                return 'from-yellow-50 to-amber-50 border-yellow-200';
-            default:
-                return 'from-gray-50 to-gray-100 border-gray-200';
-        }
-    };
+    // Per-meal-type gradients now sourced from the centralised palette
+    // (`MEAL_TYPE_COLORS` in design/colorPresets.ts) and applied via inline
+    // style so the values stay in sync with the rest of the design tokens.
+    // Tailwind can't generate utility classes from runtime hex values, hence
+    // the switch to `style={mealTypeGradient(...)}`.
+    const getMealTypeStyle = (mealType: string): React.CSSProperties => mealTypeGradient(mealType);
 
     if (loading) {
         return (
@@ -415,7 +406,8 @@ const MealPlanning: React.FC = () => {
                                         return (
                                             <div
                                                 key={`${day.toISOString()}-${mealType}`}
-                                                className={`min-h-[80px] p-2 rounded-lg border bg-gradient-to-br ${getMealTypeColor(mealType)} cursor-pointer hover:shadow-md transition-all`}
+                                                className="min-h-[80px] p-2 rounded-lg border cursor-pointer hover:shadow-md transition-all"
+                                                style={getMealTypeStyle(mealType)}
                                                 onClick={() =>
                                                     meal
                                                         ? openHouseholdEdit(meal)
@@ -449,7 +441,7 @@ const MealPlanning: React.FC = () => {
                                                                 }}
                                                                 className="p-1 hover:bg-card/70 rounded"
                                                             >
-                                                                <Trash2 className="h-3 w-3 text-red-500" />
+                                                                <Trash2 className="h-3 w-3 text-destructive" />
                                                             </button>
                                                         </div>
                                                     </div>
@@ -485,7 +477,8 @@ const MealPlanning: React.FC = () => {
                                     return (
                                         <div
                                             key={`lunchbox-${day.toISOString()}`}
-                                            className={`min-h-[80px] p-2 rounded-lg border bg-gradient-to-br ${getMealTypeColor(LUNCHBOX_TYPE)} transition-all space-y-1`}
+                                            className="min-h-[80px] p-2 rounded-lg border transition-all space-y-1"
+                                            style={getMealTypeStyle(LUNCHBOX_TYPE)}
                                         >
                                             {lunchboxes.map((lb) => (
                                                 <button
@@ -591,7 +584,7 @@ const MealPlanning: React.FC = () => {
                 </div>
             )}
             {info && (
-                <div className="rounded-input border border-emerald-300 bg-emerald-50 px-4 py-3 text-caption text-emerald-700">
+                <div className="rounded-input border border-success/40 bg-success-soft px-4 py-3 text-caption text-success">
                     {info}
                 </div>
             )}

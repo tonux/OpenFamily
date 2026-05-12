@@ -96,7 +96,7 @@ const TodayTasksCard: React.FC = () => {
                 </div>
 
                 {!hasAny ? (
-                    <div className="flex items-center gap-2 rounded-card border border-emerald-200 bg-emerald-50 px-3 py-2 text-caption text-emerald-700">
+                    <div className="flex items-center gap-2 rounded-card border border-success/30 bg-success-soft px-3 py-2 text-caption text-success">
                         <CheckCircle2 className="h-4 w-4" />
                         Rien à faire pour aujourd'hui — bien joué !
                     </div>

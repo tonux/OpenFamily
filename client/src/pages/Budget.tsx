@@ -515,8 +515,8 @@ const Budget: React.FC = () => {
                                                 <p
                                                     className={`text-xl font-bold ${
                                                         entry.is_expense
-                                                            ? 'text-red-600'
-                                                            : 'text-emerald-600'
+                                                            ? 'text-destructive'
+                                                            : 'text-success'
                                                     }`}
                                                 >
                                                     {entry.is_expense ? '-' : '+'}
@@ -536,7 +536,7 @@ const Budget: React.FC = () => {
                                                     size="sm"
                                                     onClick={() => handleDelete(entry.id)}
                                                 >
-                                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
                                                 </Button>
                                             </div>
                                         </div>
@@ -556,33 +556,33 @@ const Budget: React.FC = () => {
                     {stats && (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <Card className="border-red-100">
+                                <Card className="border-destructive/20">
                                     <CardContent className="p-4">
                                         <div className="flex items-center justify-between">
                                             <div>
                                                 <p className="text-label text-muted-foreground mb-1">
                                                     Dépenses
                                                 </p>
-                                                <p className="text-2xl font-bold text-red-600">
+                                                <p className="text-2xl font-bold text-destructive">
                                                     {formatMoney(stats.totalExpenses)}
                                                 </p>
                                             </div>
-                                            <TrendingDown className="h-8 w-8 text-red-600" />
+                                            <TrendingDown className="h-8 w-8 text-destructive" />
                                         </div>
                                     </CardContent>
                                 </Card>
-                                <Card className="border-emerald-100">
+                                <Card className="border-success/20">
                                     <CardContent className="p-4">
                                         <div className="flex items-center justify-between">
                                             <div>
                                                 <p className="text-label text-muted-foreground mb-1">
                                                     Revenus
                                                 </p>
-                                                <p className="text-2xl font-bold text-emerald-600">
+                                                <p className="text-2xl font-bold text-success">
                                                     {formatMoney(stats.totalIncome)}
                                                 </p>
                                             </div>
-                                            <TrendingUp className="h-8 w-8 text-emerald-600" />
+                                            <TrendingUp className="h-8 w-8 text-success" />
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -602,14 +602,14 @@ const Budget: React.FC = () => {
                                                 <p
                                                     className={`text-2xl font-bold ${
                                                         stats.balance >= 0
-                                                            ? 'text-nexus-blue'
-                                                            : 'text-red-600'
+                                                            ? 'text-primary'
+                                                            : 'text-destructive'
                                                     }`}
                                                 >
                                                     {formatMoney(stats.balance)}
                                                 </p>
                                             </div>
-                                            <DollarSign className="h-8 w-8 text-nexus-blue" />
+                                            <DollarSign className="h-8 w-8 text-primary" />
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -798,13 +798,13 @@ const Budget: React.FC = () => {
                             return (
                                 <Card
                                     key={cat.value}
-                                    className={isOverLimit ? 'border-red-200' : ''}
+                                    className={isOverLimit ? 'border-destructive/40' : ''}
                                 >
                                     <CardContent className="p-4">
                                         <div className="flex items-center justify-between mb-2">
                                             <h4 className="font-semibold text-body">{cat.label}</h4>
                                             {isOverLimit && (
-                                                <AlertCircle className="h-5 w-5 text-red-500" />
+                                                <AlertCircle className="h-5 w-5 text-destructive" />
                                             )}
                                         </div>
                                         <div className="space-y-2">
@@ -813,7 +813,7 @@ const Budget: React.FC = () => {
                                                     Dépensé:
                                                 </span>
                                                 <span
-                                                    className={`font-medium ${isOverLimit ? 'text-red-600' : ''}`}
+                                                    className={`font-medium ${isOverLimit ? 'text-destructive' : ''}`}
                                                 >
                                                     {formatMoney(spending)}
                                                 </span>
@@ -832,8 +832,8 @@ const Budget: React.FC = () => {
                                                         <div
                                                             className={`h-2 rounded-full ${
                                                                 isOverLimit
-                                                                    ? 'bg-red-500'
-                                                                    : 'bg-nexus-blue'
+                                                                    ? 'bg-destructive'
+                                                                    : 'bg-primary'
                                                             }`}
                                                             style={{
                                                                 width: `${Math.min(percentage, 100)}%`,

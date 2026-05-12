@@ -153,7 +153,7 @@ const MaintenanceDialog: React.FC<Props> = ({ open, onOpenChange, equipment, mai
                     </p>
                 )}
                 {recurrenceFired && (
-                    <div className="rounded-input border border-emerald-300 bg-emerald-50 px-3 py-2 text-micro text-emerald-700">
+                    <div className="rounded-input border border-success/40 bg-success-soft px-3 py-2 text-micro text-success">
                         Prochaine occurrence créée automatiquement pour le {recurrenceFired}.
                     </div>
                 )}

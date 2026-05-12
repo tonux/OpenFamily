@@ -40,6 +40,7 @@ import ItemDialog from '../components/app/ItemDialog';
 import ProjectDialog from '../components/app/ProjectDialog';
 import DocumentsList from '../components/app/DocumentsList';
 import DocumentUploadDialog from '../components/app/DocumentUploadDialog';
+import { PROJECT_STATUS_COLORS } from '../design/colorPresets';
 import {
     DOCUMENT_CATEGORIES,
     type DocumentCategory,
@@ -286,11 +287,11 @@ const EquipmentCard: React.FC<{
               : warranty < 60
                 ? {
                       label: `Garantie : ${warranty}j`,
-                      className: 'text-amber-700 bg-amber-100',
+                      className: 'text-warning bg-warning-soft',
                   }
                 : {
                       label: `Garantie OK`,
-                      className: 'text-emerald-700 bg-emerald-100',
+                      className: 'text-success bg-success-soft',
                   };
 
     return (
@@ -593,7 +594,7 @@ const MaintenanceRow: React.FC<{
                 <div
                     className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
                         isDone
-                            ? 'bg-emerald-100 text-emerald-700'
+                            ? 'bg-success-soft text-success'
                             : overdue
                               ? 'bg-destructive/10 text-destructive'
                               : 'bg-primary-soft text-primary'
@@ -831,7 +832,7 @@ const ContractRow: React.FC<{
     return (
         <li
             className={`rounded-card border bg-card p-3 ${
-                overdue ? 'border-destructive/40' : dueSoon ? 'border-amber-300' : 'border-border'
+                overdue ? 'border-destructive/40' : dueSoon ? 'border-warning/40' : 'border-border'
             } ${!contract.is_active ? 'opacity-60' : ''}`}
         >
             <div className="flex items-start gap-3">
@@ -840,7 +841,7 @@ const ContractRow: React.FC<{
                         overdue
                             ? 'bg-destructive/10 text-destructive'
                             : dueSoon
-                              ? 'bg-amber-100 text-amber-700'
+                              ? 'bg-warning-soft text-warning'
                               : 'bg-primary-soft text-primary'
                     }`}
                 >
@@ -880,7 +881,7 @@ const ContractRow: React.FC<{
                                     overdue
                                         ? 'text-destructive font-medium'
                                         : dueSoon
-                                          ? 'text-amber-700 font-medium'
+                                          ? 'text-warning font-medium'
                                           : ''
                                 }
                             >
@@ -1068,7 +1069,7 @@ const ContactCard: React.FC<{
                 <div className="flex items-center gap-1.5">
                     <p className="text-caption font-semibold truncate">{contact.name}</p>
                     {contact.is_favorite && (
-                        <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" />
+                        <Star className="h-3.5 w-3.5 text-warning fill-warning shrink-0" />
                     )}
                 </div>
                 {contact.company && (
@@ -1297,12 +1298,12 @@ const StorageTab: React.FC = () => {
                             }}
                             className={`rounded-card border-2 border-dashed p-3 text-left transition-all ${
                                 selectedRoomId === 'orphan'
-                                    ? 'border-amber-400 bg-amber-50'
+                                    ? 'border-warning/50 bg-warning-soft'
                                     : 'border-border bg-muted/20 hover:bg-muted/30'
                             }`}
                         >
                             <div className="flex items-center gap-2">
-                                <PackageOpen className="h-4 w-4 text-amber-700" />
+                                <PackageOpen className="h-4 w-4 text-warning" />
                                 <p className="text-caption font-semibold">À ranger</p>
                             </div>
                             <p className="text-micro text-muted-foreground mt-1">
@@ -1484,7 +1485,7 @@ const ItemCard: React.FC<{
                     )}
                 </p>
             ) : (
-                <p className="flex items-center gap-1 text-amber-700">
+                <p className="flex items-center gap-1 text-warning">
                     <PackageOpen className="h-3 w-3" />À ranger
                 </p>
             )}
@@ -1774,14 +1775,13 @@ const ProjectCard: React.FC<{
     onClick: () => void;
     onEdit: () => void;
 }> = ({ project, onClick, onEdit }) => {
-    const statusColor =
-        project.status === 'En cours'
-            ? 'bg-primary/10 text-primary'
-            : project.status === 'Terminé'
-              ? 'bg-emerald-100 text-emerald-700'
-              : project.status === 'Suspendu'
-                ? 'bg-amber-100 text-amber-700'
-                : 'bg-surface-2 text-muted-foreground';
+    // Status badge palette centralised in colorPresets.ts so a future
+    // status (e.g., "Annulé") can be added in one place.
+    const statusBadge = PROJECT_STATUS_COLORS[project.status] ?? {
+        bg: 'bg-surface-2',
+        text: 'text-muted-foreground',
+    };
+    const statusColor = `${statusBadge.bg} ${statusBadge.text}`;
     const checklistDone = project.checklist.filter((i) => i.done).length;
     const checklistTotal = project.checklist.length;
     return (

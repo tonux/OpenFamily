@@ -8,26 +8,31 @@ export default defineConfig({
         react(),
         VitePWA({
             registerType: 'autoUpdate',
-            includeAssets: ['favicon-32x32.png', 'favicon-16x16.png', 'apple-touch-icon.png', 'OpenFamily.png'],
+            includeAssets: [
+                'favicon-32x32.png',
+                'favicon-16x16.png',
+                'apple-touch-icon.png',
+                'OpenFamily.png',
+            ],
             manifest: {
                 name: 'OpenFamily',
                 short_name: 'OpenFamily',
                 description: 'Application de gestion familiale',
-                theme_color: '#3B82F6',
-                background_color: '#ffffff',
+                theme_color: '#8E6FB6',
+                background_color: '#FBFAF6',
                 display: 'standalone',
                 icons: [
                     {
                         src: '/icon-192.png',
                         sizes: '192x192',
-                        type: 'image/png'
+                        type: 'image/png',
                     },
                     {
                         src: '/icon-512.png',
                         sizes: '512x512',
-                        type: 'image/png'
-                    }
-                ]
+                        type: 'image/png',
+                    },
+                ],
             },
             workbox: {
                 globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
@@ -39,26 +44,26 @@ export default defineConfig({
                             cacheName: 'api-cache',
                             expiration: {
                                 maxEntries: 50,
-                                maxAgeSeconds: 300
-                            }
-                        }
-                    }
-                ]
-            }
-        })
+                                maxAgeSeconds: 300,
+                            },
+                        },
+                    },
+                ],
+            },
+        }),
     ],
     resolve: {
         alias: {
-            '@': path.resolve(__dirname, './src')
-        }
+            '@': path.resolve(__dirname, './src'),
+        },
     },
     server: {
         port: 5173,
         proxy: {
             '/api': {
                 target: process.env.VITE_API_URL || 'http://localhost:3001',
-                changeOrigin: true
-            }
-        }
-    }
+                changeOrigin: true,
+            },
+        },
+    },
 });

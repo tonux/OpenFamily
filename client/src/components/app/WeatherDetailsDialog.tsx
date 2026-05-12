@@ -126,7 +126,7 @@ const WeatherDetailsDialog: React.FC<Props> = ({
 const TomorrowDetail: React.FC<{ forecast: ForecastDTO }> = ({ forecast }) => {
     const Icon = weatherIconFor(forecast.weatherCode);
     return (
-        <section className="rounded-card border border-border bg-gradient-to-br from-blue-50 to-cyan-50 p-4">
+        <section className="rounded-card border border-border bg-info-soft p-4">
             <div className="flex items-start justify-between gap-3">
                 <div>
                     <p className="text-label text-muted-foreground">
@@ -134,7 +134,7 @@ const TomorrowDetail: React.FC<{ forecast: ForecastDTO }> = ({ forecast }) => {
                     </p>
                     <p className="text-h2 font-semibold text-foreground">{forecast.label}</p>
                 </div>
-                <Icon className="h-14 w-14 text-nexus-blue shrink-0" />
+                <Icon className="h-14 w-14 text-info shrink-0" />
             </div>
             <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-micro text-muted-foreground">
                 <DetailMetric
@@ -188,7 +188,7 @@ const WeeklyRow: React.FC<{ day: DailyForecastDTO; isFirst: boolean }> = ({ day,
     return (
         <li className="rounded-card border border-border bg-card p-3">
             <div className="flex items-center gap-3">
-                <Icon className="h-7 w-7 text-nexus-blue shrink-0" />
+                <Icon className="h-7 w-7 text-info shrink-0" />
                 <div className="flex-1 min-w-0">
                     <p className="text-caption font-semibold capitalize truncate">
                         {formatDayLabel(day.date, isFirst)}

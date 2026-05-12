@@ -294,7 +294,7 @@ const WeatherTile: React.FC<{ forecast: ForecastDTO; onClick?: () => void }> = (
             type="button"
             onClick={onClick}
             disabled={!onClick}
-            className="text-left rounded-card border border-border bg-gradient-to-br from-blue-50 to-cyan-50 p-4 transition-all hover:shadow-surface hover:border-primary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default"
+            className="text-left rounded-card border border-border bg-info-soft p-4 transition-all hover:shadow-surface hover:border-primary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default"
             aria-label="Voir le détail météo de la semaine"
         >
             <div className="flex items-start justify-between">
@@ -309,7 +309,7 @@ const WeatherTile: React.FC<{ forecast: ForecastDTO; onClick?: () => void }> = (
                     </p>
                     <p className="text-h2 font-semibold text-foreground">{forecast.label}</p>
                 </div>
-                <Icon className="h-12 w-12 text-nexus-blue" />
+                <Icon className="h-12 w-12 text-info" />
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2 text-micro text-muted-foreground">
                 <div>

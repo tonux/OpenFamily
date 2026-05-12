@@ -109,7 +109,7 @@ const HouseAlertsCard: React.FC = () => {
                         </Button>
                     </div>
                 ) : nothing ? (
-                    <div className="flex items-center gap-2 rounded-card border border-emerald-200 bg-emerald-50 px-3 py-2 text-caption text-emerald-700">
+                    <div className="flex items-center gap-2 rounded-card border border-success/30 bg-success-soft px-3 py-2 text-caption text-success">
                         <CheckCircle2 className="h-4 w-4" />
                         Tous tes équipements sont à jour ✓
                     </div>
@@ -230,7 +230,7 @@ const HouseAlertsCard: React.FC = () => {
                         {/* Expiring warranties */}
                         <div className="space-y-2">
                             <p className="text-caption font-semibold flex items-center gap-1.5">
-                                <ShieldCheck className="h-4 w-4 text-amber-600" />
+                                <ShieldCheck className="h-4 w-4 text-warning" />
                                 Garanties 60j
                             </p>
                             {data.expiring_warranties.length === 0 ? (
@@ -244,13 +244,13 @@ const HouseAlertsCard: React.FC = () => {
                                         return (
                                             <li
                                                 key={w.id}
-                                                className="rounded-input border border-amber-200 bg-amber-50 px-3 py-2 text-micro"
+                                                className="rounded-input border border-warning/30 bg-warning-soft px-3 py-2 text-micro"
                                             >
                                                 <p className="font-medium text-caption text-foreground truncate flex items-center gap-1">
-                                                    <AlertCircle className="h-3 w-3 text-amber-600" />
+                                                    <AlertCircle className="h-3 w-3 text-warning" />
                                                     {w.name}
                                                 </p>
-                                                <p className="text-amber-700">
+                                                <p className="text-warning">
                                                     Expire le {formatShortDate(w.warranty_until)}{' '}
                                                     (dans {days}j)
                                                 </p>

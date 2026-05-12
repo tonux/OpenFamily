@@ -63,7 +63,7 @@ const iconForType = (type: string) => {
 const colorForType = (type: string): string => {
     if (type === 'task_overdue') return 'text-destructive bg-destructive/10';
     if (type === 'warranty_expiring' || type === 'contract_due_soon')
-        return 'text-amber-700 bg-amber-100';
+        return 'text-warning bg-warning-soft';
     if (type === 'appointment_reminder_30min') return 'text-primary bg-primary-soft';
     return 'text-muted-foreground bg-surface-2';
 };

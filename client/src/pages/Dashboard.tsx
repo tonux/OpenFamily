@@ -117,7 +117,7 @@ const QuickOverviewKpis: React.FC<QuickOverviewKpisProps> = ({ stats, formatMone
             <button
                 type="button"
                 onClick={() => navigate('/budget')}
-                className="text-left rounded-nexus border border-border/50 bg-card p-4 hover:border-nexus-blue/40 transition-colors"
+                className="text-left rounded-nexus border border-border/50 bg-card p-4 hover:border-primary/40 transition-colors"
             >
                 <div className="flex items-center gap-2 text-label text-muted-foreground mb-2">
                     <Wallet className="h-4 w-4" />
@@ -129,9 +129,9 @@ const QuickOverviewKpis: React.FC<QuickOverviewKpisProps> = ({ stats, formatMone
                 <div
                     className={`flex items-center gap-1 text-caption mt-2 ${
                         budgetTrend.tone === 'bad'
-                            ? 'text-rose-600'
+                            ? 'text-destructive'
                             : budgetTrend.tone === 'good'
-                              ? 'text-emerald-600'
+                              ? 'text-success'
                               : 'text-muted-foreground'
                     }`}
                 >
@@ -151,7 +151,7 @@ const QuickOverviewKpis: React.FC<QuickOverviewKpisProps> = ({ stats, formatMone
             <button
                 type="button"
                 onClick={() => navigate('/shopping')}
-                className="text-left rounded-nexus border border-border/50 bg-card p-4 hover:border-nexus-blue/40 transition-colors"
+                className="text-left rounded-nexus border border-border/50 bg-card p-4 hover:border-primary/40 transition-colors"
             >
                 <div className="flex items-center gap-2 text-label text-muted-foreground mb-2">
                     <ShoppingCart className="h-4 w-4" />
@@ -163,7 +163,7 @@ const QuickOverviewKpis: React.FC<QuickOverviewKpisProps> = ({ stats, formatMone
                 </div>
                 <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
                     <div
-                        className="h-full bg-emerald-500 transition-all"
+                        className="h-full bg-success transition-all"
                         style={{ width: `${shoppingProgress}%` }}
                         aria-label={`${shoppingProgress}% cochés`}
                     />
@@ -177,7 +177,7 @@ const QuickOverviewKpis: React.FC<QuickOverviewKpisProps> = ({ stats, formatMone
             <button
                 type="button"
                 onClick={() => navigate('/meal-planning')}
-                className="text-left rounded-nexus border border-border/50 bg-card p-4 hover:border-nexus-blue/40 transition-colors"
+                className="text-left rounded-nexus border border-border/50 bg-card p-4 hover:border-primary/40 transition-colors"
             >
                 <div className="flex items-center gap-2 text-label text-muted-foreground mb-2">
                     <UtensilsCrossed className="h-4 w-4" />
@@ -194,7 +194,7 @@ const QuickOverviewKpis: React.FC<QuickOverviewKpisProps> = ({ stats, formatMone
                         <div
                             key={i}
                             className={`h-2 flex-1 rounded-full ${
-                                i < kpis.mealPlanning.plannedDays ? 'bg-amber-500' : 'bg-muted'
+                                i < kpis.mealPlanning.plannedDays ? 'bg-warning' : 'bg-muted'
                             }`}
                         />
                     ))}
@@ -210,7 +210,7 @@ const QuickOverviewKpis: React.FC<QuickOverviewKpisProps> = ({ stats, formatMone
             <button
                 type="button"
                 onClick={() => navigate('/calendar')}
-                className="text-left rounded-nexus border border-border/50 bg-card p-4 hover:border-nexus-blue/40 transition-colors"
+                className="text-left rounded-nexus border border-border/50 bg-card p-4 hover:border-primary/40 transition-colors"
             >
                 <div className="flex items-center gap-2 text-label text-muted-foreground mb-2">
                     <CalendarClock className="h-4 w-4" />
@@ -221,7 +221,7 @@ const QuickOverviewKpis: React.FC<QuickOverviewKpisProps> = ({ stats, formatMone
                         <div className="text-body font-semibold text-foreground truncate">
                             {kpis.nextAppointment.title}
                         </div>
-                        <p className="text-caption text-nexus-blue mt-1">
+                        <p className="text-caption text-primary mt-1">
                             {formatRelativeDate(kpis.nextAppointment.startTime)}
                         </p>
                     </>
@@ -229,7 +229,7 @@ const QuickOverviewKpis: React.FC<QuickOverviewKpisProps> = ({ stats, formatMone
                     <p className="text-body text-muted-foreground">Aucun à venir</p>
                 )}
                 {kpis.overdueTasks > 0 ? (
-                    <p className="text-caption text-rose-600 mt-2 flex items-center gap-1">
+                    <p className="text-caption text-destructive mt-2 flex items-center gap-1">
                         <AlertCircle className="h-3 w-3" />
                         {kpis.overdueTasks} tâche{kpis.overdueTasks > 1 ? 's' : ''} en retard
                     </p>
@@ -284,36 +284,36 @@ const Dashboard: React.FC = () => {
             title: 'Rendez-vous à venir',
             value: stats?.upcomingAppointments || 0,
             icon: Calendar,
-            color: 'text-nexus-blue',
-            bgColor: 'bg-blue-50',
-            borderColor: 'border-blue-100',
+            color: 'text-info',
+            bgColor: 'bg-info-soft',
+            borderColor: 'border-info/20',
             href: '/calendar',
         },
         {
             title: 'Tâches en attente',
             value: stats?.pendingTasks || 0,
             icon: CheckSquare,
-            color: 'text-emerald-600',
-            bgColor: 'bg-emerald-50',
-            borderColor: 'border-emerald-100',
+            color: 'text-success',
+            bgColor: 'bg-success-soft',
+            borderColor: 'border-success/20',
             href: '/tasks',
         },
         {
             title: 'Articles à acheter',
             value: stats?.shoppingItems || 0,
             icon: ShoppingCart,
-            color: 'text-purple-600',
-            bgColor: 'bg-purple-50',
-            borderColor: 'border-purple-100',
+            color: 'text-primary',
+            bgColor: 'bg-primary-soft',
+            borderColor: 'border-primary/20',
             href: '/shopping',
         },
         {
             title: 'Dépenses du mois',
             value: formatMoney(Number(stats?.thisMonthExpenses || 0), { maximumFractionDigits: 0 }),
             icon: Wallet,
-            color: 'text-nexus-amber',
-            bgColor: 'bg-orange-50',
-            borderColor: 'border-orange-100',
+            color: 'text-warning',
+            bgColor: 'bg-warning-soft',
+            borderColor: 'border-warning/20',
             href: '/budget',
         },
     ];
@@ -336,15 +336,15 @@ const Dashboard: React.FC = () => {
             </div>
 
             {stats && stats.budgetAlerts > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-nexus p-4 flex items-start gap-4 shadow-nexus-sm animate-pulse">
-                    <div className="p-2 bg-amber-100 rounded-full shrink-0">
-                        <AlertCircle className="h-5 w-5 text-amber-600" />
+                <div className="bg-warning-soft border border-warning/30 rounded-nexus p-4 flex items-start gap-4 shadow-nexus-sm animate-pulse">
+                    <div className="p-2 bg-warning/20 rounded-full shrink-0">
+                        <AlertCircle className="h-5 w-5 text-warning" />
                     </div>
                     <div className="flex-1">
-                        <h3 className="font-semibold text-amber-900 text-body-sm">
+                        <h3 className="font-semibold text-foreground text-body-sm">
                             Attention au budget
                         </h3>
-                        <p className="text-sm text-amber-800 mt-1">
+                        <p className="text-sm text-muted-foreground mt-1">
                             {stats.budgetAlerts} catégorie{stats.budgetAlerts > 1 ? 's ont' : ' a'}{' '}
                             dépassé le budget mensuel défini.
                         </p>
@@ -352,7 +352,7 @@ const Dashboard: React.FC = () => {
                     <Button
                         size="sm"
                         onClick={() => navigate('/budget')}
-                        className="bg-amber-600 hover:bg-amber-700 text-white shrink-0 shadow-none border-0"
+                        className="bg-warning hover:bg-warning/90 text-foreground shrink-0 shadow-none border-0"
                     >
                         Voir détail
                     </Button>
@@ -402,7 +402,7 @@ const Dashboard: React.FC = () => {
                             variant="ghost"
                             size="sm"
                             onClick={() => navigate('/calendar')}
-                            className="text-nexus-blue hover:text-nexus-blue/80 hover:bg-blue-50"
+                            className="text-primary hover:text-primary/80 hover:bg-primary-soft"
                         >
                             Voir tout <ChevronRight className="w-4 h-4 ml-1" />
                         </Button>
@@ -424,10 +424,10 @@ const Dashboard: React.FC = () => {
                         <button
                             type="button"
                             onClick={() => navigate('/family')}
-                            className="w-full p-4 text-left bg-nexus-background rounded-nexus hover:bg-blue-50 transition-colors cursor-pointer group border border-transparent hover:border-blue-100"
+                            className="w-full p-4 text-left bg-surface rounded-nexus hover:bg-primary-soft transition-colors cursor-pointer group border border-transparent hover:border-primary/20"
                         >
-                            <h3 className="font-semibold text-body-sm mb-1 group-hover:text-nexus-blue transition-colors flex items-center gap-2">
-                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-nexus-blue text-white text-[10px]">
+                            <h3 className="font-semibold text-body-sm mb-1 group-hover:text-primary transition-colors flex items-center gap-2">
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px]">
                                     1
                                 </span>
                                 Ajoutez votre famille
@@ -439,10 +439,10 @@ const Dashboard: React.FC = () => {
                         <button
                             type="button"
                             onClick={() => navigate('/meal-planning')}
-                            className="w-full p-4 text-left bg-nexus-background rounded-nexus hover:bg-blue-50 transition-colors cursor-pointer group border border-transparent hover:border-blue-100"
+                            className="w-full p-4 text-left bg-surface rounded-nexus hover:bg-primary-soft transition-colors cursor-pointer group border border-transparent hover:border-primary/20"
                         >
-                            <h3 className="font-semibold text-body-sm mb-1 group-hover:text-nexus-blue transition-colors flex items-center gap-2">
-                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-nexus-blue text-white text-[10px]">
+                            <h3 className="font-semibold text-body-sm mb-1 group-hover:text-primary transition-colors flex items-center gap-2">
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px]">
                                     2
                                 </span>
                                 Planifiez vos repas
@@ -454,10 +454,10 @@ const Dashboard: React.FC = () => {
                         <button
                             type="button"
                             onClick={() => navigate('/budget')}
-                            className="w-full p-4 text-left bg-nexus-background rounded-nexus hover:bg-blue-50 transition-colors cursor-pointer group border border-transparent hover:border-blue-100"
+                            className="w-full p-4 text-left bg-surface rounded-nexus hover:bg-primary-soft transition-colors cursor-pointer group border border-transparent hover:border-primary/20"
                         >
-                            <h3 className="font-semibold text-body-sm mb-1 group-hover:text-nexus-blue transition-colors flex items-center gap-2">
-                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-nexus-blue text-white text-[10px]">
+                            <h3 className="font-semibold text-body-sm mb-1 group-hover:text-primary transition-colors flex items-center gap-2">
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px]">
                                     3
                                 </span>
                                 Suivez le budget

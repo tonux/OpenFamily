@@ -293,60 +293,60 @@ const Tasks: React.FC = () => {
             {/* Statistics */}
             {stats && (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <Card className="border-blue-100 bg-card">
+                    <Card className="border-info/20 bg-card">
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-label text-muted-foreground mb-1">Total</p>
                                     <p className="text-2xl font-bold">{stats.total}</p>
                                 </div>
-                                <CheckSquare className="h-8 w-8 text-nexus-blue" />
+                                <CheckSquare className="h-8 w-8 text-info" />
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="border-emerald-100 bg-card">
+                    <Card className="border-success/20 bg-card">
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-label text-muted-foreground mb-1">
                                         Complétées
                                     </p>
-                                    <p className="text-2xl font-bold text-emerald-600">
+                                    <p className="text-2xl font-bold text-success">
                                         {stats.completed}
                                     </p>
                                 </div>
-                                <TrendingUp className="h-8 w-8 text-emerald-600" />
+                                <TrendingUp className="h-8 w-8 text-success" />
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="border-amber-100 bg-card">
+                    <Card className="border-warning/20 bg-card">
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-label text-muted-foreground mb-1">
                                         En attente
                                     </p>
-                                    <p className="text-2xl font-bold text-amber-600">
+                                    <p className="text-2xl font-bold text-warning">
                                         {stats.pending}
                                     </p>
                                 </div>
-                                <Square className="h-8 w-8 text-amber-600" />
+                                <Square className="h-8 w-8 text-warning" />
                             </div>
                         </CardContent>
                     </Card>
-                    <Card className="border-purple-100 bg-card">
+                    <Card className="border-primary/20 bg-card">
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-label text-muted-foreground mb-1">
                                         Taux de réussite
                                     </p>
-                                    <p className="text-2xl font-bold text-purple-600">
+                                    <p className="text-2xl font-bold text-primary">
                                         {stats.completionRate}%
                                     </p>
                                 </div>
-                                <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
-                                    <span className="text-sm font-bold text-purple-600">%</span>
+                                <div className="h-8 w-8 rounded-full bg-primary-soft flex items-center justify-center">
+                                    <span className="text-sm font-bold text-primary">%</span>
                                 </div>
                             </div>
                         </CardContent>
@@ -431,9 +431,9 @@ const Tasks: React.FC = () => {
                                         className="mt-1 flex-shrink-0"
                                     >
                                         {task.is_completed ? (
-                                            <CheckSquare className="h-5 w-5 text-emerald-600" />
+                                            <CheckSquare className="h-5 w-5 text-success" />
                                         ) : (
-                                            <Square className="h-5 w-5 text-muted-foreground hover:text-nexus-blue transition-colors" />
+                                            <Square className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
                                         )}
                                     </button>
                                     <div className="flex-1 min-w-0">
@@ -513,7 +513,7 @@ const Tasks: React.FC = () => {
                                                     size="sm"
                                                     onClick={() => handleDelete(task.id)}
                                                 >
-                                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                                    <Trash2 className="h-4 w-4 text-destructive" />
                                                 </Button>
                                             </div>
                                         </div>

@@ -1,10 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
     darkMode: ['class'],
-    content: [
-        './index.html',
-        './src/**/*.{js,ts,jsx,tsx}',
-    ],
+    content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
     theme: {
         container: {
             center: true,
@@ -45,15 +42,32 @@ export default {
                 accent: {
                     DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
                     foreground: 'rgb(var(--accent-foreground) / <alpha-value>)',
+                    soft: 'rgb(var(--accent-soft) / <alpha-value>)',
                 },
                 destructive: {
                     DEFAULT: 'rgb(var(--destructive) / <alpha-value>)',
                     foreground: 'rgb(var(--destructive-foreground) / <alpha-value>)',
+                    soft: 'rgb(var(--destructive-soft) / <alpha-value>)',
                 },
-                success: 'rgb(var(--success) / <alpha-value>)',
-                warning: 'rgb(var(--warning) / <alpha-value>)',
-                danger: 'rgb(var(--danger) / <alpha-value>)',
-                info: 'rgb(var(--info) / <alpha-value>)',
+                // Semantic colors expose a `-soft` variant so pages can drop
+                // the hard-coded `bg-emerald-50` / `bg-amber-50` patterns and
+                // pick up the global palette automatically.
+                success: {
+                    DEFAULT: 'rgb(var(--success) / <alpha-value>)',
+                    soft: 'rgb(var(--success-soft) / <alpha-value>)',
+                },
+                warning: {
+                    DEFAULT: 'rgb(var(--warning) / <alpha-value>)',
+                    soft: 'rgb(var(--warning-soft) / <alpha-value>)',
+                },
+                danger: {
+                    DEFAULT: 'rgb(var(--danger) / <alpha-value>)',
+                    soft: 'rgb(var(--danger-soft) / <alpha-value>)',
+                },
+                info: {
+                    DEFAULT: 'rgb(var(--info) / <alpha-value>)',
+                    soft: 'rgb(var(--info-soft) / <alpha-value>)',
+                },
                 card: {
                     DEFAULT: 'rgb(var(--card) / <alpha-value>)',
                     foreground: 'rgb(var(--card-foreground) / <alpha-value>)',
@@ -72,7 +86,16 @@ export default {
                 },
             },
             fontFamily: {
-                sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+                sans: [
+                    'Inter',
+                    'system-ui',
+                    '-apple-system',
+                    'Segoe UI',
+                    'Roboto',
+                    'Helvetica',
+                    'Arial',
+                    'sans-serif',
+                ],
             },
             fontSize: {
                 display: ['28px', { lineHeight: '32px', fontWeight: '600' }],
@@ -103,8 +126,11 @@ export default {
                 'nexus-sm': 'var(--shadow-surface)',
                 nexus: 'var(--shadow-surface)',
                 'nexus-lg': 'var(--shadow-surface-hover)',
-                'nexus-blue': '0 6px 20px rgba(255, 68, 102, 0.22)',
-                'nexus-amber': '0 6px 20px rgba(245, 158, 11, 0.2)',
+                // Glow shadows tinted with the new palette. RGB intentionally
+                // hard-coded (Tailwind doesn't resolve CSS vars in shadow utility
+                // syntax) — re-tune both values here when the tokens change.
+                'nexus-blue': '0 6px 20px rgba(142, 111, 182, 0.22)',
+                'nexus-amber': '0 6px 20px rgba(245, 197, 70, 0.2)',
             },
             keyframes: {
                 'accordion-down': {
