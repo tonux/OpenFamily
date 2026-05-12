@@ -11,6 +11,7 @@ import Recipes from './pages/Recipes';
 import MealPlanning from './pages/MealPlanning';
 import Budget from './pages/Budget';
 import Family from './pages/Family';
+import House from './pages/House';
 import Settings from './pages/Settings';
 import CurrencyOnboardingDialog from './components/CurrencyOnboardingDialog';
 
@@ -44,6 +45,7 @@ function App() {
                 <Route path="/meal-planning" element={<MealPlanning />} />
                 <Route path="/budget" element={<Budget />} />
                 <Route path="/family" element={<Family />} />
+                <Route path="/house" element={<House />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

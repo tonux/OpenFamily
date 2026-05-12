@@ -13,6 +13,7 @@ import {
     UtensilsCrossed,
     Wallet,
     Users,
+    Wrench,
     Settings,
     Moon,
     Sun,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
+import NotificationsBell from '../app/NotificationsBell';
 
 interface LayoutProps {
     children: ReactNode;
@@ -41,6 +43,7 @@ const navigation = [
     { labelKey: 'nav.meals', href: '/meal-planning', icon: UtensilsCrossed },
     { labelKey: 'nav.budget', href: '/budget', icon: Wallet },
     { labelKey: 'nav.family', href: '/family', icon: Users },
+    { labelKey: 'nav.house', href: '/house', icon: Wrench },
     { labelKey: 'nav.settings', href: '/settings', icon: Settings },
 ] as const;
 
@@ -61,6 +64,7 @@ const quickActions = [
     { labelKey: 'quick_actions.add_meal', href: '/meal-planning', icon: UtensilsCrossed },
     { labelKey: 'quick_actions.add_expense', href: '/budget', icon: Wallet },
     { labelKey: 'quick_actions.add_member', href: '/family', icon: Users },
+    { labelKey: 'quick_actions.add_equipment', href: '/house', icon: Wrench },
 ] as const;
 
 const isRouteActive = (pathname: string, href: string) => {
@@ -220,28 +224,31 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                             </div>
                         </div>
 
-                        <div className="hidden items-center gap-2 lg:flex">
-                            <Button
-                                variant="secondary"
-                                size="icon"
-                                onClick={toggleTheme}
-                                aria-label="Changer le theme"
-                            >
-                                {actualTheme === 'dark' ? (
-                                    <Sun className="h-4 w-4" />
-                                ) : (
-                                    <Moon className="h-4 w-4" />
-                                )}
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={logout}
-                                aria-label="Se deconnecter"
-                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            >
-                                <LogOut className="h-4 w-4" />
-                            </Button>
+                        <div className="flex items-center gap-2">
+                            <NotificationsBell />
+                            <div className="hidden items-center gap-2 lg:flex">
+                                <Button
+                                    variant="secondary"
+                                    size="icon"
+                                    onClick={toggleTheme}
+                                    aria-label="Changer le theme"
+                                >
+                                    {actualTheme === 'dark' ? (
+                                        <Sun className="h-4 w-4" />
+                                    ) : (
+                                        <Moon className="h-4 w-4" />
+                                    )}
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={logout}
+                                    aria-label="Se deconnecter"
+                                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                >
+                                    <LogOut className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </header>

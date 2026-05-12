@@ -1,7 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Plus, CheckSquare, Square, Trash2, Edit2, Filter, TrendingUp } from 'lucide-react';
-import { Card, CardContent, Button, Dialog, Input, Select, Textarea, DatePicker, Badge } from '../components/ui';
+import { Plus, CheckSquare, Square, Trash2, Edit2, Filter, TrendingUp, Repeat } from 'lucide-react';
+import {
+    Card,
+    CardContent,
+    Button,
+    Dialog,
+    Input,
+    Select,
+    Textarea,
+    DatePicker,
+    Badge,
+    useToast,
+} from '../components/ui';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -52,6 +63,7 @@ const FREQUENCIES = [
 ];
 
 const Tasks: React.FC = () => {
+    const { showToast } = useToast();
     const [tasks, setTasks] = useState<Task[]>([]);
     const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
     const [stats, setStats] = useState<TaskStats | null>(null);
@@ -95,7 +107,9 @@ const Tasks: React.FC = () => {
 
     const loadFamilyMembers = async () => {
         try {
-            const response = await api.get<{ success: boolean; data: FamilyMember[] }>('/api/family');
+            const response = await api.get<{ success: boolean; data: FamilyMember[] }>(
+                '/api/family',
+            );
             if (response.success) {
                 setFamilyMembers(response.data);
             }
@@ -107,13 +121,17 @@ const Tasks: React.FC = () => {
 
     const loadStats = async () => {
         try {
-            const response = await api.get<{ success: boolean; data: TaskStats }>('/api/tasks/statistics');
+            const response = await api.get<{ success: boolean; data: TaskStats }>(
+                '/api/tasks/statistics',
+            );
             if (response.success) {
                 setStats(response.data);
             }
         } catch (error) {
             console.error('Failed to load stats:', error);
-            setError(error instanceof Error ? error.message : 'Impossible de charger les statistiques.');
+            setError(
+                error instanceof Error ? error.message : 'Impossible de charger les statistiques.',
+            );
         }
     };
 
@@ -132,20 +150,38 @@ const Tasks: React.FC = () => {
             loadStats();
         } catch (error) {
             console.error('Failed to save task:', error);
-            setError(error instanceof Error ? error.message : 'Impossible d’enregistrer cette tâche.');
+            setError(
+                error instanceof Error ? error.message : 'Impossible d’enregistrer cette tâche.',
+            );
         }
     };
 
     const handleToggleComplete = async (task: Task) => {
         try {
-            await api.put(`/api/tasks/${task.id}`, {
+            // Server may return next_occurrence when marking a recurring task
+            // complete — surface it so the user knows the next instance exists.
+            const response = await api.put<{
+                success: boolean;
+                data: Task & { next_occurrence?: Task | null };
+            }>(`/api/tasks/${task.id}`, {
                 is_completed: !task.is_completed,
             });
+            if (response.success && response.data?.next_occurrence) {
+                const next = response.data.next_occurrence;
+                showToast({
+                    title: 'Tâche terminée ✓',
+                    description: next.due_date
+                        ? `Prochaine "${next.title}" planifiée le ${format(new Date(next.due_date), 'dd MMM', { locale: fr })}`
+                        : `Prochaine "${next.title}" créée`,
+                });
+            }
             loadTasks();
             loadStats();
         } catch (error) {
             console.error('Failed to toggle task:', error);
-            setError(error instanceof Error ? error.message : 'Impossible de mettre à jour cette tâche.');
+            setError(
+                error instanceof Error ? error.message : 'Impossible de mettre à jour cette tâche.',
+            );
         }
     };
 
@@ -157,7 +193,9 @@ const Tasks: React.FC = () => {
             loadStats();
         } catch (error) {
             console.error('Failed to delete task:', error);
-            setError(error instanceof Error ? error.message : 'Impossible de supprimer cette tâche.');
+            setError(
+                error instanceof Error ? error.message : 'Impossible de supprimer cette tâche.',
+            );
         }
     };
 
@@ -190,8 +228,14 @@ const Tasks: React.FC = () => {
         if (filterPriority && task.priority !== filterPriority) return false;
         if (filterStatus === 'completed' && !task.is_completed) return false;
         if (filterStatus === 'pending' && task.is_completed) return false;
-        if (filterMember === '__unassigned__' && task.assigned_to && task.assigned_to.length > 0) return false;
-        if (filterMember && filterMember !== '__unassigned__' && !(task.assigned_to || []).includes(filterMember)) return false;
+        if (filterMember === '__unassigned__' && task.assigned_to && task.assigned_to.length > 0)
+            return false;
+        if (
+            filterMember &&
+            filterMember !== '__unassigned__' &&
+            !(task.assigned_to || []).includes(filterMember)
+        )
+            return false;
         return true;
     });
 
@@ -213,7 +257,9 @@ const Tasks: React.FC = () => {
             <div className="flex h-full items-center justify-center min-h-[50vh]">
                 <div className="flex flex-col items-center gap-4">
                     <div className="spinner-brand" />
-                    <p className="text-muted-foreground font-medium animate-pulse">Chargement des tâches...</p>
+                    <p className="text-muted-foreground font-medium animate-pulse">
+                        Chargement des tâches...
+                    </p>
                 </div>
             </div>
         );
@@ -229,9 +275,16 @@ const Tasks: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-h1 mb-1">Tâches</h1>
-                    <p className="text-muted-foreground text-body">Gérez vos tâches familiales et suivez leur progression</p>
+                    <p className="text-muted-foreground text-body">
+                        Gérez vos tâches familiales et suivez leur progression
+                    </p>
                 </div>
-                <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+                <Button
+                    onClick={() => {
+                        resetForm();
+                        setDialogOpen(true);
+                    }}
+                >
                     <Plus className="w-4 h-4 mr-2" />
                     Nouvelle tâche
                 </Button>
@@ -255,8 +308,12 @@ const Tasks: React.FC = () => {
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-label text-muted-foreground mb-1">Complétées</p>
-                                    <p className="text-2xl font-bold text-emerald-600">{stats.completed}</p>
+                                    <p className="text-label text-muted-foreground mb-1">
+                                        Complétées
+                                    </p>
+                                    <p className="text-2xl font-bold text-emerald-600">
+                                        {stats.completed}
+                                    </p>
                                 </div>
                                 <TrendingUp className="h-8 w-8 text-emerald-600" />
                             </div>
@@ -266,8 +323,12 @@ const Tasks: React.FC = () => {
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-label text-muted-foreground mb-1">En attente</p>
-                                    <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
+                                    <p className="text-label text-muted-foreground mb-1">
+                                        En attente
+                                    </p>
+                                    <p className="text-2xl font-bold text-amber-600">
+                                        {stats.pending}
+                                    </p>
                                 </div>
                                 <Square className="h-8 w-8 text-amber-600" />
                             </div>
@@ -277,8 +338,12 @@ const Tasks: React.FC = () => {
                         <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-label text-muted-foreground mb-1">Taux de réussite</p>
-                                    <p className="text-2xl font-bold text-purple-600">{stats.completionRate}%</p>
+                                    <p className="text-label text-muted-foreground mb-1">
+                                        Taux de réussite
+                                    </p>
+                                    <p className="text-2xl font-bold text-purple-600">
+                                        {stats.completionRate}%
+                                    </p>
                                 </div>
                                 <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
                                     <span className="text-sm font-bold text-purple-600">%</span>
@@ -310,10 +375,7 @@ const Tasks: React.FC = () => {
                         <Select
                             value={filterPriority}
                             onValueChange={setFilterPriority}
-                            options={[
-                                { value: '', label: 'Toutes priorités' },
-                                ...PRIORITIES,
-                            ]}
+                            options={[{ value: '', label: 'Toutes priorités' }, ...PRIORITIES]}
                             className="w-48"
                         />
                         <Select
@@ -378,8 +440,11 @@ const Tasks: React.FC = () => {
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="flex-1">
                                                 <h3
-                                                    className={`text-body font-semibold mb-1 ${task.is_completed ? 'line-through text-muted-foreground' : ''
-                                                        }`}
+                                                    className={`text-body font-semibold mb-1 ${
+                                                        task.is_completed
+                                                            ? 'line-through text-muted-foreground'
+                                                            : ''
+                                                    }`}
                                                 >
                                                     {task.title}
                                                 </h3>
@@ -390,31 +455,49 @@ const Tasks: React.FC = () => {
                                                 )}
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     {task.priority && (
-                                                        <Badge variant={getPriorityColor(task.priority)}>
+                                                        <Badge
+                                                            variant={getPriorityColor(
+                                                                task.priority,
+                                                            )}
+                                                        >
                                                             {task.priority}
                                                         </Badge>
                                                     )}
-                                                    {task.frequency && task.frequency !== 'Une fois' && (
-                                                        <Badge variant="secondary">{task.frequency}</Badge>
-                                                    )}
+                                                    {task.frequency &&
+                                                        task.frequency !== 'Une fois' && (
+                                                            <Badge variant="secondary">
+                                                                <Repeat className="h-3 w-3 mr-1" />
+                                                                {task.frequency}
+                                                            </Badge>
+                                                        )}
                                                     {task.due_date && (
                                                         <Badge variant="default">
-                                                            Échéance: {format(new Date(task.due_date), 'dd MMM yyyy', { locale: fr })}
+                                                            Échéance:{' '}
+                                                            {format(
+                                                                new Date(task.due_date),
+                                                                'dd MMM yyyy',
+                                                                { locale: fr },
+                                                            )}
                                                         </Badge>
                                                     )}
-                                                {(task.assigned_to_members || []).map((member) => (
-                                                        <Badge
-                                                            key={member.id}
-                                                            variant="primary"
-                                                            className="flex items-center gap-1"
-                                                        >
-                                                            <div
-                                                                className="w-2 h-2 rounded-full"
-                                                                style={{ backgroundColor: member.color }}
-                                                            />
-                                                            {member.name}
-                                                        </Badge>
-                                                    ))}
+                                                    {(task.assigned_to_members || []).map(
+                                                        (member) => (
+                                                            <Badge
+                                                                key={member.id}
+                                                                variant="primary"
+                                                                className="flex items-center gap-1"
+                                                            >
+                                                                <div
+                                                                    className="w-2 h-2 rounded-full"
+                                                                    style={{
+                                                                        backgroundColor:
+                                                                            member.color,
+                                                                    }}
+                                                                />
+                                                                {member.name}
+                                                            </Badge>
+                                                        ),
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -471,7 +554,9 @@ const Tasks: React.FC = () => {
                             </label>
                             <Select
                                 value={formData.priority}
-                                onValueChange={(value) => setFormData({ ...formData, priority: value })}
+                                onValueChange={(value) =>
+                                    setFormData({ ...formData, priority: value })
+                                }
                                 options={PRIORITIES}
                             />
                         </div>
@@ -481,7 +566,9 @@ const Tasks: React.FC = () => {
                             </label>
                             <Select
                                 value={formData.frequency}
-                                onValueChange={(value) => setFormData({ ...formData, frequency: value })}
+                                onValueChange={(value) =>
+                                    setFormData({ ...formData, frequency: value })
+                                }
                                 options={FREQUENCIES}
                             />
                         </div>
@@ -496,19 +583,28 @@ const Tasks: React.FC = () => {
                             Assigner à (optionnel)
                         </label>
                         {familyMembers.length === 0 ? (
-                            <p className="text-body-sm text-muted-foreground">Aucun membre disponible</p>
+                            <p className="text-body-sm text-muted-foreground">
+                                Aucun membre disponible
+                            </p>
                         ) : (
                             <div className="space-y-2 rounded-input border border-border bg-surface-2/40 p-3">
                                 {familyMembers.map((member) => (
-                                    <label key={member.id} className="flex items-center gap-2 cursor-pointer hover:bg-nexus-background rounded px-1 py-0.5">
+                                    <label
+                                        key={member.id}
+                                        className="flex items-center gap-2 cursor-pointer hover:bg-nexus-background rounded px-1 py-0.5"
+                                    >
                                         <input
                                             type="checkbox"
                                             checked={formData.assigned_to.includes(member.id)}
                                             onChange={() => {
                                                 setFormData((prev) => ({
                                                     ...prev,
-                                                    assigned_to: prev.assigned_to.includes(member.id)
-                                                        ? prev.assigned_to.filter((id) => id !== member.id)
+                                                    assigned_to: prev.assigned_to.includes(
+                                                        member.id,
+                                                    )
+                                                        ? prev.assigned_to.filter(
+                                                              (id) => id !== member.id,
+                                                          )
                                                         : [...prev.assigned_to, member.id],
                                                 }));
                                             }}
@@ -532,9 +628,7 @@ const Tasks: React.FC = () => {
                         >
                             Annuler
                         </Button>
-                        <Button type="submit">
-                            {editingTask ? 'Enregistrer' : 'Créer'}
-                        </Button>
+                        <Button type="submit">{editingTask ? 'Enregistrer' : 'Créer'}</Button>
                     </div>
                 </form>
             </Dialog>

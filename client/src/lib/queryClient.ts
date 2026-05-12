@@ -55,4 +55,42 @@ export const queryKeys = {
         weekly: (override: { latitude: number; longitude: number } | null, days: number) =>
             [...queryKeys.weather.all, 'weekly', override, days] as const,
     },
+    tasks: {
+        all: ['tasks'] as const,
+        today: () => [...queryKeys.tasks.all, 'today'] as const,
+    },
+    notifications: {
+        all: ['notifications'] as const,
+        list: () => [...queryKeys.notifications.all, 'list'] as const,
+        unreadCount: () => [...queryKeys.notifications.all, 'unread-count'] as const,
+    },
+    house: {
+        all: ['house'] as const,
+        equipments: (filters?: { category?: string; q?: string }) =>
+            [...queryKeys.house.all, 'equipments', filters ?? null] as const,
+        equipment: (id: string) => [...queryKeys.house.all, 'equipments', id] as const,
+        maintenance: (filters?: { equipment_id?: string; status?: 'upcoming' | 'done' | 'all' }) =>
+            [...queryKeys.house.all, 'maintenance', filters ?? null] as const,
+        contracts: (filters?: { status?: 'active' | 'inactive' | 'all' }) =>
+            [...queryKeys.house.all, 'contracts', filters ?? null] as const,
+        contacts: (filters?: { category?: string; q?: string; equipment_id?: string }) =>
+            [...queryKeys.house.all, 'contacts', filters ?? null] as const,
+        rooms: () => [...queryKeys.house.all, 'rooms'] as const,
+        items: (filters?: { room_id?: string; category?: string; q?: string; orphan?: boolean }) =>
+            [...queryKeys.house.all, 'items', filters ?? null] as const,
+        projects: (filters?: { status?: string }) =>
+            [...queryKeys.house.all, 'projects', filters ?? null] as const,
+        project: (id: string) => [...queryKeys.house.all, 'projects', id] as const,
+        dashboard: () => [...queryKeys.house.all, 'dashboard'] as const,
+    },
+    documents: {
+        all: ['documents'] as const,
+        list: (filters?: {
+            entity_type?: string;
+            entity_id?: string;
+            category?: string;
+            q?: string;
+            unlinked?: boolean;
+        }) => [...queryKeys.documents.all, 'list', filters ?? null] as const,
+    },
 } as const;

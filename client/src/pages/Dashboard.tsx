@@ -19,6 +19,8 @@ import { Button } from '../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import { useCurrency } from '../lib/useCurrency';
 import WeatherClothingCard from '../components/app/WeatherClothingCard';
+import HouseAlertsCard from '../components/app/HouseAlertsCard';
+import TodayTasksCard from '../components/app/TodayTasksCard';
 
 interface KpiPayload {
     budget: {
@@ -386,7 +388,11 @@ const Dashboard: React.FC = () => {
                 })}
             </div>
 
+            <TodayTasksCard />
+
             <WeatherClothingCard />
+
+            <HouseAlertsCard />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <Card className="lg:col-span-2 shadow-nexus border-none">

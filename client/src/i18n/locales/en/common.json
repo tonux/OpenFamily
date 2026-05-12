@@ -12,6 +12,7 @@
     "meals": "Meals",
     "budget": "Budget",
     "family": "Family",
+    "house": "Home",
     "settings": "Settings",
     "mobile": {
       "home": "Home",
@@ -31,7 +32,8 @@
     "add_recipe": "Add a recipe",
     "add_meal": "Add a meal",
     "add_expense": "Add an expense",
-    "add_member": "Add a family member"
+    "add_member": "Add a family member",
+    "add_equipment": "Add an equipment"
   },
   "header": {
     "toggle_dark": "Switch to dark theme",

@@ -8,6 +8,11 @@ import pool, { runMigrations } from './db';
 import logger from './lib/logger';
 import { getJwtSecret } from './config/loadEnv';
 import { ACCESS_COOKIE_NAME } from './middleware/auth';
+import {
+    startNotificationsScheduler,
+    stopNotificationsScheduler,
+} from './lib/notificationsScheduler';
+import { ensureBucket } from './lib/storage';
 
 const PORT = process.env.SERVER_PORT || 3001;
 
@@ -251,12 +256,21 @@ const startServer = async () => {
         await pool.query('SELECT NOW()');
         logger.info('server.database_connected');
 
+        // Ensure the object storage bucket exists. Crash hard if MinIO is
+        // unreachable — Documents and Projects modules cannot run without
+        // it, and a half-broken state is worse than a clear failure.
+        await ensureBucket();
+
         server.listen(PORT, () => {
             logger.info('server.started', {
                 port: Number(PORT),
                 httpUrl: `http://localhost:${PORT}`,
                 wsUrl: `ws://localhost:${PORT}${WS_PATH}`,
             });
+            // Start the in-app notifications scheduler AFTER the HTTP server
+            // is listening — that way the readiness probe (and downstream
+            // services) wait on the actual server, not on cron registration.
+            startNotificationsScheduler();
         });
     } catch (error) {
         logger.error('server.start_failed', {
@@ -274,6 +288,7 @@ const startServer = async () => {
 const shutdown = (signal: string) => {
     logger.info('server.signal_received', { signal });
     clearInterval(heartbeat);
+    stopNotificationsScheduler();
     wss.clients.forEach((client) => client.terminate());
     server.close(() => {
         logger.info('server.closed');
