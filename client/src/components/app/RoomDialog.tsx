@@ -13,19 +13,19 @@ import {
 } from '../../hooks/useHouse';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
-// Room palette aligned with the Famille pop charter (mauve / menthe / miel /
-// corail / bleuet …). Keep 9 swatches so the picker fills a single row on
+// Room palette aligned with the Famille Sénégalaise charter (indigo / safran /
+// baobab / turquoise …). Keep 9 swatches so the picker fills a single row on
 // mobile.
 const ROOM_COLORS = [
-    '#8E6FB6', // mauve (primary)
-    '#6FB58F', // menthe
-    '#F5C546', // miel
-    '#E36571', // corail
-    '#6593C2', // bleuet
-    '#B399D9', // lavande
-    '#F4A28C', // saumon
-    '#95B79E', // sauge
-    '#D9A05B', // caramel
+    '#2D4A78', // indigo (primary, Papa)
+    '#E8943C', // safran (accent)
+    '#5C8A4B', // baobab
+    '#4A9B8E', // turquoise (Fille)
+    '#F4C430', // soleil (Fils)
+    '#C0392B', // corail brique
+    '#C44569', // magenta
+    '#D4A24C', // or lion
+    '#8B5A3C', // terre baobab
 ];
 
 interface Props {

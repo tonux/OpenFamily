@@ -1,12 +1,15 @@
 /* =============================================================================
- * Design tokens — palette "Famille pop" (mauve doux + menthe + miel)
+ * Design tokens — palette "Famille Sénégalaise"
  *
- * - Primary : mauve doux (#8E6FB6) — original, peu d'apps l'utilisent
- * - Accent  : menthe (#A4D4AE) — apaisant, optimiste
- * - Backgrounds chauds (coquille / crème), jamais blanc pur
- * - Foregrounds en aubergine nuit, jamais noir pur
- * - Soft variants pour chaque sémantique (success/warning/destructive/info)
- *   pour remplacer les hard-codés `bg-emerald-50` / `bg-amber-50` / etc.
+ * Inspiré directement de l'illustration des mascottes (public/images/family.png).
+ * - Primary  : indigo royal (#2D4A78) — le boubou de Papa "The Protector"
+ * - Accent   : safran (#E8943C) — broderies dorées + Lion "The Alert"
+ * - Success  : vert baobab (#5C8A4B) — l'arbre "The Foundation"
+ * - Warning  : jaune soleil (#F4C430) — t-shirt + étincelles de Fils
+ * - Danger   : corail brique (#C0392B) — short de Fils
+ * - Info     : turquoise (#4A9B8E) — la tunique de Fille "Helpful Bloom"
+ * - Backgrounds chauds (sable / crème), jamais blanc pur
+ * - Foregrounds en brun terre nuit, jamais noir pur
  *
  * Convention : RGB en triplets espace-séparés pour Tailwind
  * `rgb(var(--token) / <alpha-value>)`.
@@ -16,78 +19,78 @@
     color-scheme: light;
 
     /* Base tokens (hex) — kept for any consumer reading them directly. */
-    --bg: #fbfaf6;
+    --bg: #f8f1e4;
     --surface: #ffffff;
-    --surface-2: #efede5;
-    --border-base: #e5e1da;
-    --border-strong-base: #d6d1c5;
-    --text-base: #2c2438;
-    --text-muted-base: #7c7388;
+    --surface-2: #efe5d0;
+    --border-base: #e2d5bc;
+    --border-strong-base: #d1c0a2;
+    --text-base: #3b2e1f;
+    --text-muted-base: #7c6950;
 
-    --primary-base: #8e6fb6;
-    --primary-hover-base: #7e5ea7;
-    --primary-pressed-base: #6e4f96;
-    --primary-soft-base: #f1ecf8;
+    --primary-base: #2d4a78;
+    --primary-hover-base: #243c63;
+    --primary-pressed-base: #1b2d4a;
+    --primary-soft-base: #e8eef7;
 
-    --success-base: #6fb58f;
-    --warning-base: #f5c546;
-    --danger-base: #e36571;
-    --info-base: #6593c2;
+    --success-base: #5c8a4b;
+    --warning-base: #f4c430;
+    --danger-base: #c0392b;
+    --info-base: #4a9b8e;
 
     /* RGB tokens for Tailwind rgb(var(--token) / alpha) */
-    --background: 251 250 246; /* coquille (chaud) */
-    --foreground: 44 36 56; /* aubergine nuit */
-    --card: 255 255 255; /* cards posées sur background coquille */
-    --card-foreground: 44 36 56;
+    --background: 248 241 228; /* sable crème (chaud, ciel de l'image) */
+    --foreground: 59 46 31; /* brun terre nuit */
+    --card: 255 255 255; /* cards posées sur background sable */
+    --card-foreground: 59 46 31;
     --popover: 255 255 255;
-    --popover-foreground: 44 36 56;
+    --popover-foreground: 59 46 31;
 
-    --surface-rgb: 251 250 246;
-    --surface-2-rgb: 239 237 229;
+    --surface-rgb: 248 241 228;
+    --surface-2-rgb: 239 229 208;
 
-    --primary: 142 111 182; /* #8E6FB6 mauve doux */
+    --primary: 45 74 120; /* #2D4A78 indigo royal — boubou Papa */
     --primary-foreground: 255 255 255;
-    --primary-hover: 126 94 167;
-    --primary-pressed: 110 79 150;
-    --primary-soft: 241 236 248; /* tint mauve très clair pour bg subtil */
+    --primary-hover: 36 60 99;
+    --primary-pressed: 27 45 74;
+    --primary-soft: 232 238 247; /* tint indigo très clair pour bg subtil */
 
-    --secondary: 239 237 229; /* = surface-2 */
-    --secondary-foreground: 44 36 56;
-    --muted: 245 243 237;
-    --muted-foreground: 124 115 136; /* bruyère gris-mauve */
+    --secondary: 239 229 208; /* = surface-2 (sable doux) */
+    --secondary-foreground: 59 46 31;
+    --muted: 244 235 215;
+    --muted-foreground: 124 105 80; /* moka doux */
 
-    /* Accent = menthe : utilisé comme couleur de soutien (sapin clair vivant) */
-    --accent: 164 212 174;
-    --accent-soft: 232 243 236;
-    --accent-foreground: 31 58 40;
+    /* Accent = safran : couleur de soutien chaude (broderies + lion) */
+    --accent: 232 148 60; /* #E8943C safran */
+    --accent-soft: 252 239 225; /* #FCEFE1 */
+    --accent-foreground: 90 50 15; /* brun safran foncé pour contraste sur soft */
 
-    /* Destructive = corail doux (pas un rouge alarmant) */
-    --destructive: 227 101 113;
+    /* Destructive = corail brique (court de Fils) */
+    --destructive: 192 57 43;
     --destructive-foreground: 255 255 255;
-    --destructive-soft: 251 227 229;
+    --destructive-soft: 250 226 222;
 
     /* Sémantiques + leurs soft variants (pour remplacer les bg-X-50 hard-codés) */
-    --success: 111 181 143;
-    --success-soft: 224 240 230;
-    --warning: 245 197 70; /* miel solaire */
-    --warning-soft: 252 243 210;
-    --danger: 227 101 113; /* alias historique = destructive */
-    --danger-soft: 251 227 229;
-    --info: 101 147 194; /* bleuet, complémentaire au mauve */
-    --info-soft: 225 236 246;
+    --success: 92 138 75; /* #5C8A4B vert baobab */
+    --success-soft: 232 240 226;
+    --warning: 244 196 48; /* #F4C430 jaune soleil */
+    --warning-soft: 254 244 210;
+    --danger: 192 57 43; /* alias historique = destructive */
+    --danger-soft: 250 226 222;
+    --info: 74 155 142; /* #4A9B8E turquoise (Fille) */
+    --info-soft: 224 240 237;
 
-    --border: 229 225 218; /* lin */
-    --border-strong: 214 209 197;
-    --input: 229 225 218;
-    --ring: 142 111 182; /* anneau focus = primary */
+    --border: 226 213 188; /* lin sable */
+    --border-strong: 209 192 162;
+    --input: 226 213 188;
+    --ring: 45 74 120; /* anneau focus = primary indigo */
 
     --radius: 12px;
     --radius-card: 16px;
     --radius-input: 12px;
     --radius-pill: 999px;
 
-    --shadow-surface: 0 1px 2px rgba(44, 36, 56, 0.06);
-    --shadow-surface-hover: 0 6px 20px rgba(44, 36, 56, 0.1);
+    --shadow-surface: 0 1px 2px rgba(59, 46, 31, 0.08);
+    --shadow-surface-hover: 0 6px 20px rgba(59, 46, 31, 0.12);
 
     --motion-fast: 160ms;
     --motion-base: 240ms;
@@ -97,69 +100,69 @@
 .dark {
     color-scheme: dark;
 
-    --bg: #1c1729;
-    --surface: #251e33;
-    --surface-2: #2a2342;
-    --border-base: #3a2f4d;
-    --border-strong-base: #4a3d62;
-    --text-base: #ece7dc;
-    --text-muted-base: #9a91a8;
+    --bg: #15203a;
+    --surface: #1e2a47;
+    --surface-2: #263558;
+    --border-base: #344773;
+    --border-strong-base: #455c92;
+    --text-base: #f5ebd7;
+    --text-muted-base: #a8b4cd;
 
-    --primary-base: #b399d9; /* mauve plus brillant pour contraste */
-    --primary-hover-base: #c0aae0;
-    --primary-pressed-base: #a387c9;
-    --primary-soft-base: #2d1f44;
+    --primary-base: #7c9cd1; /* indigo plus brillant pour contraste */
+    --primary-hover-base: #91aede;
+    --primary-pressed-base: #698ac3;
+    --primary-soft-base: #1f2c4a;
 
-    --success-base: #91c9a8;
+    --success-base: #82be6e;
     --warning-base: #f8d374;
-    --danger-base: #e88a93;
-    --info-base: #84aed8;
+    --danger-base: #dc6e64;
+    --info-base: #6ec3b4;
 
-    --background: 28 23 41; /* nuit aubergine */
-    --foreground: 236 231 220; /* crème (≠ blanc pur) */
-    --card: 37 30 51;
-    --card-foreground: 236 231 220;
-    --popover: 37 30 51;
-    --popover-foreground: 236 231 220;
+    --background: 21 32 58; /* nuit indigo profonde */
+    --foreground: 245 235 215; /* crème chaude (≠ blanc pur) */
+    --card: 30 42 71;
+    --card-foreground: 245 235 215;
+    --popover: 30 42 71;
+    --popover-foreground: 245 235 215;
 
-    --surface-rgb: 37 30 51;
-    --surface-2-rgb: 42 35 66;
+    --surface-rgb: 30 42 71;
+    --surface-2-rgb: 38 53 88;
 
-    --primary: 179 153 217; /* #B399D9 */
-    --primary-foreground: 28 23 41;
-    --primary-hover: 192 170 224;
-    --primary-pressed: 163 135 201;
-    --primary-soft: 45 31 68;
+    --primary: 124 156 209; /* #7C9CD1 indigo lumineux */
+    --primary-foreground: 21 32 58;
+    --primary-hover: 145 174 222;
+    --primary-pressed: 105 138 195;
+    --primary-soft: 31 44 74;
 
-    --secondary: 42 35 66;
-    --secondary-foreground: 236 231 220;
-    --muted: 46 38 63;
-    --muted-foreground: 154 145 168;
+    --secondary: 38 53 88;
+    --secondary-foreground: 245 235 215;
+    --muted: 44 60 95;
+    --muted-foreground: 168 180 205;
 
-    --accent: 184 224 190; /* menthe brillante */
-    --accent-soft: 31 58 40;
-    --accent-foreground: 184 224 190;
+    --accent: 240 175 100; /* safran clair */
+    --accent-soft: 65 45 25;
+    --accent-foreground: 240 175 100;
 
-    --destructive: 232 138 147; /* corail brillant */
-    --destructive-foreground: 28 23 41;
-    --destructive-soft: 60 28 34;
+    --destructive: 220 110 100; /* corail clair */
+    --destructive-foreground: 21 32 58;
+    --destructive-soft: 70 30 26;
 
-    --success: 145 201 168;
-    --success-soft: 27 50 38;
+    --success: 130 190 110;
+    --success-soft: 30 55 22;
     --warning: 248 211 116;
     --warning-soft: 60 46 18;
-    --danger: 232 138 147;
-    --danger-soft: 60 28 34;
-    --info: 132 174 216;
-    --info-soft: 24 40 60;
+    --danger: 220 110 100;
+    --danger-soft: 70 30 26;
+    --info: 110 195 180;
+    --info-soft: 24 55 50;
 
-    --border: 58 47 77;
-    --border-strong: 74 61 98;
-    --input: 58 47 77;
-    --ring: 179 153 217;
+    --border: 52 71 115;
+    --border-strong: 69 92 146;
+    --input: 52 71 115;
+    --ring: 124 156 209;
 
-    --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.35);
-    --shadow-surface-hover: 0 8px 28px rgba(0, 0, 0, 0.45);
+    --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-surface-hover: 0 8px 28px rgba(0, 0, 0, 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {

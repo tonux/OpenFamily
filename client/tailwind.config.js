@@ -129,8 +129,8 @@ export default {
                 // Glow shadows tinted with the new palette. RGB intentionally
                 // hard-coded (Tailwind doesn't resolve CSS vars in shadow utility
                 // syntax) — re-tune both values here when the tokens change.
-                'nexus-blue': '0 6px 20px rgba(142, 111, 182, 0.22)',
-                'nexus-amber': '0 6px 20px rgba(245, 197, 70, 0.2)',
+                'nexus-blue': '0 6px 20px rgba(45, 74, 120, 0.22)',
+                'nexus-amber': '0 6px 20px rgba(232, 148, 60, 0.22)',
             },
             keyframes: {
                 'accordion-down': {

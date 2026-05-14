@@ -1,6 +1,7 @@
 // =============================================================================
-// Color presets — palette "Famille pop" (mauve doux + menthe + miel).
+// Color presets — palette "Famille Sénégalaise" (indigo + safran + baobab).
 //
+// Inspired by the mascot illustration (public/images/family.png).
 // Centralises every categorical palette outside of CSS tokens:
 //   - CHART_COLOR_PRESETS : recharts series cycle (uses the runtime CSS vars,
 //     so dark mode swaps automatically).
@@ -14,29 +15,30 @@
 import type React from 'react';
 
 export const CHART_COLOR_PRESETS = [
-    'rgb(var(--primary))', // mauve
-    'rgb(var(--accent))', // menthe
-    'rgb(var(--warning))', // miel
-    'rgb(var(--info))', // bleuet
-    'rgb(var(--destructive))', // corail doux
-    'rgb(var(--muted-foreground))',
+    'rgb(var(--primary))', // indigo Papa
+    'rgb(var(--accent))', // safran
+    'rgb(var(--success))', // vert baobab
+    'rgb(var(--info))', // turquoise (Fille)
+    'rgb(var(--warning))', // jaune soleil
+    'rgb(var(--destructive))', // corail brique
 ];
 
-// Default for newly-created family members (matches the new primary).
-export const DEFAULT_FAMILY_COLOR = '#8E6FB6';
+// Default for newly-created family members (matches the new primary indigo).
+export const DEFAULT_FAMILY_COLOR = '#2D4A78';
 
 // Color picker for family members & rooms. 9 distinct tones tied to the
-// "Famille pop" mood — mauve, menthe, miel, corail, bleuet + four neighbours.
+// "Famille Sénégalaise" mood — indigo, safran, baobab, turquoise, soleil,
+// corail, magenta, or lion, terre baobab.
 export const FAMILY_COLOR_PRESETS = [
-    { value: '#8E6FB6', label: 'Mauve' },
-    { value: '#6FB58F', label: 'Menthe' },
-    { value: '#F5C546', label: 'Miel' },
-    { value: '#E36571', label: 'Corail' },
-    { value: '#6593C2', label: 'Bleuet' },
-    { value: '#B399D9', label: 'Lavande' },
-    { value: '#F4A28C', label: 'Saumon' },
-    { value: '#95B79E', label: 'Sauge' },
-    { value: '#D9A05B', label: 'Caramel' },
+    { value: '#2D4A78', label: 'Indigo' },
+    { value: '#E8943C', label: 'Safran' },
+    { value: '#5C8A4B', label: 'Baobab' },
+    { value: '#4A9B8E', label: 'Turquoise' },
+    { value: '#F4C430', label: 'Soleil' },
+    { value: '#C0392B', label: 'Corail' },
+    { value: '#C44569', label: 'Magenta' },
+    { value: '#D4A24C', label: 'Or lion' },
+    { value: '#8B5A3C', label: 'Terre' },
 ];
 
 // =============================================================================
@@ -53,18 +55,18 @@ export interface MealTypePalette {
 }
 
 export const MEAL_TYPE_COLORS: Record<string, MealTypePalette> = {
-    'Petit-déjeuner': { from: '#FCF3D2', to: '#FBE6B8', border: '#F5C546' }, // miel
-    Déjeuner: { from: '#E1ECF6', to: '#D2E1F0', border: '#6593C2' }, // bleuet
-    Dîner: { from: '#F1ECF8', to: '#E8DFF3', border: '#8E6FB6' }, // mauve
-    Snack: { from: '#E8F3EC', to: '#D5EBDB', border: '#A4D4AE' }, // menthe
-    'Boîte à lunch': { from: '#FBE3E5', to: '#F8D2D6', border: '#E36571' }, // corail
+    'Petit-déjeuner': { from: '#FEF4D2', to: '#FCE9B0', border: '#F4C430' }, // soleil
+    Déjeuner: { from: '#E8EEF7', to: '#D2DEEF', border: '#2D4A78' }, // indigo
+    Dîner: { from: '#FCEFE1', to: '#F8DDC0', border: '#E8943C' }, // safran
+    Snack: { from: '#E8F0E2', to: '#D5E5C9', border: '#5C8A4B' }, // baobab
+    'Boîte à lunch': { from: '#FAE2DE', to: '#F5C9C2', border: '#C0392B' }, // corail
 };
 
 export const mealTypeGradient = (mealType: string): React.CSSProperties => {
     const palette = MEAL_TYPE_COLORS[mealType] ?? {
-        from: '#F5F3ED',
-        to: '#EFEDE5',
-        border: '#D6D1C5',
+        from: '#F8F1E4',
+        to: '#EFE5D0',
+        border: '#D1C0A2',
     };
     return {
         background: `linear-gradient(to bottom right, ${palette.from}, ${palette.to})`,
