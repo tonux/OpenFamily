@@ -72,6 +72,17 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-openfamily-minio-2024}
       MINIO_BUCKET: ${MINIO_BUCKET:-openfamily}
       MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-50}
+      # Email notifications (Resend SMTP)
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-true}
+      RESEND_SMTP_HOST: ${RESEND_SMTP_HOST:-smtp.resend.com}
+      RESEND_SMTP_PORT: ${RESEND_SMTP_PORT:-465}
+      RESEND_SMTP_USER: ${RESEND_SMTP_USER:-resend}
+      RESEND_SMTP_PASSWORD: ${RESEND_SMTP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+      APP_BASE_URL: ${APP_BASE_URL}
+      EMAIL_DIGEST_HOUR: ${EMAIL_DIGEST_HOUR:-8}
+      EMAIL_TEST_ENABLED: ${EMAIL_TEST_ENABLED:-}
     ports:
       - '3001:3001'
     depends_on:

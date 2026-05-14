@@ -62,7 +62,15 @@ export const updateLocationBodySchema = z
     })
     .strict();
 
+export const updateEmailPreferencesBodySchema = z
+    .object({
+        enabled: z.boolean(),
+        digestMode: z.enum(['immediate', 'daily']),
+    })
+    .strict();
+
 export type RegisterBody = z.infer<typeof registerBodySchema>;
 export type LoginBody = z.infer<typeof loginBodySchema>;
 export type UpdateCurrencyBody = z.infer<typeof updateCurrencyBodySchema>;
 export type UpdateLocationBody = z.infer<typeof updateLocationBodySchema>;
+export type UpdateEmailPreferencesBody = z.infer<typeof updateEmailPreferencesBodySchema>;

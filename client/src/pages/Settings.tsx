@@ -1,6 +1,16 @@
 import React, { useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { Download, Upload, CheckCircle, AlertCircle, Loader2, Coins, MapPin } from 'lucide-react';
+import {
+    Download,
+    Upload,
+    CheckCircle,
+    AlertCircle,
+    Loader2,
+    Coins,
+    MapPin,
+    Mail,
+    Send,
+} from 'lucide-react';
 import { Card, CardContent, Button, Input, Select } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { SUPPORTED_CURRENCIES, DEFAULT_CURRENCY } from '../lib/currencies';
@@ -62,6 +72,68 @@ const Settings: React.FC = () => {
                 ? 'Ville introuvable — vérifie l’orthographe ou essaie une commune plus grande.'
                 : msg;
             setCityMessage({ kind: 'error', text: friendly });
+        }
+    };
+
+    // ---- Email notifications ----
+    const [emailEnabled, setEmailEnabled] = useState<boolean>(
+        user?.email_notifications_enabled ?? true,
+    );
+    const [emailDigestMode, setEmailDigestMode] = useState<'immediate' | 'daily'>(
+        user?.email_digest_mode ?? 'immediate',
+    );
+    const [emailSaving, setEmailSaving] = useState(false);
+    const [emailMessage, setEmailMessage] = useState<{
+        kind: 'success' | 'error';
+        text: string;
+    } | null>(null);
+    const [emailTesting, setEmailTesting] = useState(false);
+
+    const emailDirty =
+        emailEnabled !== (user?.email_notifications_enabled ?? true) ||
+        emailDigestMode !== (user?.email_digest_mode ?? 'immediate');
+
+    const handleSaveEmailPrefs = async () => {
+        setEmailSaving(true);
+        setEmailMessage(null);
+        try {
+            const response = await api.patch<{ success: boolean; data: { user: any } }>(
+                '/api/auth/me/email-preferences',
+                { enabled: emailEnabled, digestMode: emailDigestMode },
+            );
+            if (response.success && response.data?.user) {
+                setUserFromServer(response.data.user);
+            }
+            setEmailMessage({ kind: 'success', text: 'Préférences mises à jour.' });
+        } catch (err) {
+            setEmailMessage({
+                kind: 'error',
+                text: err instanceof Error ? err.message : 'Erreur lors de la mise à jour.',
+            });
+        } finally {
+            setEmailSaving(false);
+        }
+    };
+
+    const handleSendTestEmail = async () => {
+        setEmailTesting(true);
+        setEmailMessage(null);
+        try {
+            await api.post<{ success: boolean }>('/api/notifications/_test-email', {});
+            setEmailMessage({
+                kind: 'success',
+                text: `Email de test envoyé à ${user?.email}. Pensez à vérifier vos spams.`,
+            });
+        } catch (err) {
+            setEmailMessage({
+                kind: 'error',
+                text:
+                    err instanceof Error
+                        ? `Échec de l'envoi : ${err.message}`
+                        : "Échec de l'envoi du test.",
+            });
+        } finally {
+            setEmailTesting(false);
         }
     };
 
@@ -272,6 +344,106 @@ const Settings: React.FC = () => {
                                 )}
                                 Enregistrer la ville
                             </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Email notifications */}
+            <Card>
+                <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
+                            <Mail className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="text-caption font-semibold text-foreground">
+                                Notifications par email
+                            </h3>
+                            <p className="mt-1 text-micro text-muted-foreground">
+                                Recevez les rappels (rendez-vous, tâches, contrats, garanties) sur
+                                votre boîte mail. Les emails partent à l'adresse{' '}
+                                <span className="font-medium text-foreground">{user?.email}</span>.
+                            </p>
+
+                            <label className="mt-4 flex cursor-pointer items-center gap-3">
+                                <input
+                                    type="checkbox"
+                                    checked={emailEnabled}
+                                    onChange={(e) => setEmailEnabled(e.target.checked)}
+                                    className="h-4 w-4 rounded border-border accent-primary"
+                                />
+                                <span className="text-caption text-foreground">
+                                    Activer les notifications par email
+                                </span>
+                            </label>
+
+                            <div className="mt-4 max-w-sm">
+                                <label className="text-micro font-medium text-muted-foreground">
+                                    Mode d'envoi
+                                </label>
+                                <div
+                                    className={`mt-1 ${emailEnabled ? '' : 'pointer-events-none opacity-50'}`}
+                                >
+                                    <Select
+                                        value={emailDigestMode}
+                                        onValueChange={(v) =>
+                                            setEmailDigestMode(v as 'immediate' | 'daily')
+                                        }
+                                        options={[
+                                            {
+                                                value: 'immediate',
+                                                label: 'Immédiat — un email par notification',
+                                            },
+                                            {
+                                                value: 'daily',
+                                                label: 'Quotidien — récapitulatif à 8h',
+                                            },
+                                        ]}
+                                    />
+                                </div>
+                            </div>
+
+                            {emailMessage && (
+                                <p
+                                    className={`mt-3 flex items-center gap-1 text-micro ${
+                                        emailMessage.kind === 'error'
+                                            ? 'text-destructive'
+                                            : 'text-emerald-600'
+                                    }`}
+                                >
+                                    {emailMessage.kind === 'error' ? (
+                                        <AlertCircle className="h-4 w-4" />
+                                    ) : (
+                                        <CheckCircle className="h-4 w-4" />
+                                    )}
+                                    {emailMessage.text}
+                                </p>
+                            )}
+
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                <Button
+                                    onClick={handleSaveEmailPrefs}
+                                    disabled={!emailDirty || emailSaving}
+                                >
+                                    {emailSaving && (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    )}
+                                    Enregistrer
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    onClick={handleSendTestEmail}
+                                    disabled={emailTesting || !emailEnabled}
+                                >
+                                    {emailTesting ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Send className="mr-2 h-4 w-4" />
+                                    )}
+                                    {emailTesting ? 'Envoi…' : 'Envoyer un email de test'}
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </CardContent>

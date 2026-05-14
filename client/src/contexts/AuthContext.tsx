@@ -10,6 +10,8 @@ interface User {
     country_code?: string | null;
     latitude?: number | null;
     longitude?: number | null;
+    email_notifications_enabled?: boolean;
+    email_digest_mode?: 'immediate' | 'daily';
 }
 
 interface AuthContextType {

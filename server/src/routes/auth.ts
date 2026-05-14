@@ -14,6 +14,7 @@ import {
     loginBodySchema,
     registerBodySchema,
     updateCurrencyBodySchema,
+    updateEmailPreferencesBodySchema,
     updateLocationBodySchema,
 } from '../schemas/auth';
 import { normalizeEmail } from '../lib/normalize';
@@ -23,7 +24,9 @@ import logger from '../lib/logger';
 
 // Columns returned to the client across /me, /login, /register, PATCH /me/*.
 // Centralising the projection avoids drift between endpoints.
-const USER_PUBLIC_COLUMNS = 'id, email, name, currency, city, country_code, latitude, longitude';
+const USER_PUBLIC_COLUMNS =
+    'id, email, name, currency, city, country_code, latitude, longitude, ' +
+    'email_notifications_enabled, email_digest_mode';
 
 // The list of supported currencies now lives in schemas/auth.ts as a zod
 // enum (single source of truth) and remains synchronized with
@@ -121,6 +124,41 @@ router.patch(
     },
 );
 
+// Update email-notification preferences. Two switches:
+//   - enabled:    master kill switch
+//   - digestMode: 'immediate' (one email per notif) or 'daily' (8h recap)
+// We always persist both so the user can toggle the master back on without
+// losing their previously chosen mode.
+router.patch(
+    '/me/email-preferences',
+    authMiddleware,
+    validate({ body: updateEmailPreferencesBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const { enabled, digestMode } = req.body as {
+                enabled: boolean;
+                digestMode: 'immediate' | 'daily';
+            };
+            const result = await query(
+                `UPDATE users
+                 SET email_notifications_enabled = $1, email_digest_mode = $2
+                 WHERE id = $3
+                 RETURNING ${USER_PUBLIC_COLUMNS}`,
+                [enabled, digestMode, req.userId],
+            );
+            if (result.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'User not found' });
+            }
+            return res.json({ success: true, data: { user: result.rows[0] } });
+        } catch (error) {
+            logger.error('auth.update_email_preferences_failed', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return res.status(500).json({ success: false, error: 'Internal server error' });
+        }
+    },
+);
+
 // Register
 router.post('/register', validate({ body: registerBodySchema }), async (req, res) => {
     if (process.env.REGISTRATION_ENABLED === 'false') {
@@ -207,6 +245,8 @@ router.post('/login', validate({ body: loginBodySchema }), async (req, res) => {
                     country_code: user.country_code ?? null,
                     latitude: user.latitude ?? null,
                     longitude: user.longitude ?? null,
+                    email_notifications_enabled: user.email_notifications_enabled ?? true,
+                    email_digest_mode: user.email_digest_mode ?? 'immediate',
                 },
             },
         });

@@ -2,6 +2,8 @@ import cron, { type ScheduledTask } from 'node-cron';
 import { query } from '../db';
 import { createNotificationIfNotExists } from './notifications';
 import logger from './logger';
+import { getEmailConfig } from '../email/config';
+import { processDailyDigests, processImmediateEmails } from '../email/emailWorker';
 
 // =============================================================================
 // Notifications scheduler
@@ -236,10 +238,40 @@ export const startNotificationsScheduler = (): void => {
     });
 
     schedules.push(appointmentJob, morningJob);
+
+    // Email workers — only register when email is enabled. We keep them in the
+    // same scheduler module so a single stop() call shuts everything down.
+    const startedJobs = ['appointments_every_15m', 'morning_pulse_daily_8am'];
+    const emailCfg = getEmailConfig();
+    if (emailCfg.enabled) {
+        // Immediate mode: drain pending notifications every 5 min. Tight enough
+        // to feel near-realtime, loose enough to coalesce a burst into one batch.
+        const immediateJob = cron.schedule('*/5 * * * *', () => {
+            void safeRun('email_immediate', async () => {
+                await processImmediateEmails();
+            });
+        });
+
+        // Daily digests: send right after the morning pulse finishes inserting
+        // the day's notifications. Same hour as the pulse, +5 min so the rows
+        // exist by the time we scan.
+        const digestJob = cron.schedule(`5 ${emailCfg.digestHour} * * *`, () => {
+            void safeRun('email_digest', async () => {
+                await processDailyDigests();
+            });
+        });
+
+        schedules.push(immediateJob, digestJob);
+        startedJobs.push(
+            'email_immediate_every_5m',
+            `email_digest_daily_${emailCfg.digestHour}h05`,
+        );
+    } else {
+        logger.info('notifications.email_workers_disabled');
+    }
+
     started = true;
-    logger.info('notifications.scheduler_started', {
-        jobs: ['appointments_every_15m', 'morning_pulse_daily_8am'],
-    });
+    logger.info('notifications.scheduler_started', { jobs: startedJobs });
 };
 
 export const stopNotificationsScheduler = (): void => {
@@ -253,3 +285,5 @@ export const stopNotificationsScheduler = (): void => {
 // Exposed so an admin/dev endpoint can trigger the morning pulse on demand.
 export const _runMorningPulseNow = runMorningPulse;
 export const _runAppointmentRemindersNow = runAppointmentReminders;
+export const _runEmailImmediateNow = processImmediateEmails;
+export const _runEmailDigestNow = processDailyDigests;

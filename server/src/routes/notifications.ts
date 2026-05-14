@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { query } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import logger from '../lib/logger';
+import { getEmailConfig } from '../email/config';
+import { sendNotificationEmail } from '../email/EmailService';
+import { EmailError } from '../email/errors';
 
 // =============================================================================
 // /api/notifications
@@ -96,6 +99,45 @@ router.post('/mark-all-read', async (req: AuthRequest, res) => {
             error: error instanceof Error ? error.message : String(error),
         });
         res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+// Send a synthetic test email to the authenticated user. Gated by
+// EMAIL_TEST_ENABLED (auto-true in non-production) — this hits the live SMTP
+// transport and is only meant for setup verification.
+router.post('/_test-email', async (req: AuthRequest, res) => {
+    const cfg = getEmailConfig();
+    if (!cfg.testEndpointEnabled) {
+        return res.status(403).json({ success: false, error: 'Test endpoint disabled' });
+    }
+    if (!cfg.enabled) {
+        return res.status(503).json({ success: false, error: 'EMAIL_ENABLED is false' });
+    }
+    try {
+        const userResult = await query('SELECT email, name FROM users WHERE id = $1', [req.userId]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        const { email, name } = userResult.rows[0];
+        const result = await sendNotificationEmail(
+            { email, name },
+            {
+                type: 'task_due_today',
+                title: 'Email de test OpenFamily',
+                message:
+                    'Si vous voyez ce message, la configuration SMTP fonctionne. ' +
+                    'Vous pouvez fermer cette page.',
+            },
+        );
+        return res.json({
+            success: true,
+            data: { messageId: result.messageId, latencyMs: result.latencyMs },
+        });
+    } catch (error) {
+        const code = error instanceof EmailError ? error.code : 'UNKNOWN';
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('notifications.test_email_failed', { code, error: message });
+        return res.status(502).json({ success: false, error: `${code}: ${message}` });
     }
 });
 
