@@ -25,6 +25,13 @@ COPY shared ./shared
 COPY client ./client
 COPY tsconfig.json ./
 
+# Vite bakes VITE_* vars into the bundle at build time — they MUST be set
+# before `npm run build`, not at container runtime. Defaults match local dev.
+ARG VITE_API_URL=http://localhost:3001
+ARG VITE_WS_URL=ws://localhost:3001
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_WS_URL=$VITE_WS_URL
+
 # Build shared and client
 RUN cd shared && npm run build
 RUN cd client && npm run build
