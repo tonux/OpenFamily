@@ -40,3 +40,41 @@ export const clothingSuggestionsBodySchema = z
     );
 
 export type ClothingSuggestionsBody = z.infer<typeof clothingSuggestionsBodySchema>;
+
+// Recipe generator. The route resolves familyMemberIds against the user's
+// own family (allergies + dietary_preferences are merged into the prompt
+// server-side), so the client never has to sniff that data itself.
+export const generateRecipesBodySchema = z
+    .object({
+        ingredients: z
+            .array(z.string().trim().min(1).max(120))
+            .min(1, { message: 'At least one ingredient is required' })
+            .max(30, { message: 'Too many ingredients (max 30)' }),
+        familyMemberIds: z.array(z.string().uuid()).max(15).optional(),
+        cuisine: z.enum(['senegalese', 'world', 'any']).optional(),
+        simple: z.boolean().optional(),
+        maxTimeMinutes: z.number().int().positive().max(360).optional(),
+        count: z
+            .union([z.literal(1), z.literal(2), z.literal(3)])
+            .optional()
+            .default(3),
+    })
+    .strict();
+
+export type GenerateRecipesBody = z.infer<typeof generateRecipesBodySchema>;
+
+// Weekly nutrition analysis. The route fetches meal_plans between the two
+// dates server-side, then sends them (joined with recipe + family member
+// labels) to the model for evaluation.
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const analyzeWeekMealsBodySchema = z
+    .object({
+        startDate: z.string().regex(ISO_DATE_RE, 'startDate must be YYYY-MM-DD'),
+        endDate: z.string().regex(ISO_DATE_RE, 'endDate must be YYYY-MM-DD'),
+    })
+    .strict()
+    .refine((v) => v.startDate <= v.endDate, {
+        message: 'startDate must be on or before endDate',
+    });
+
+export type AnalyzeWeekMealsBody = z.infer<typeof analyzeWeekMealsBodySchema>;

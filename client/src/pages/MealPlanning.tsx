@@ -8,8 +8,10 @@ import {
     Trash2,
     Sandwich,
     ShoppingBasket,
+    Sparkles,
 } from 'lucide-react';
 import { Card, CardContent, Button, Dialog, Input, Select, Textarea, Tabs } from '../components/ui';
+import { NutritionAnalysisDialog } from '../components/app/NutritionAnalysisDialog';
 import {
     format,
     startOfWeek,
@@ -76,6 +78,7 @@ const DEFAULT_LUNCHBOX_FORM = {
 
 const MealPlanning: React.FC = () => {
     const [currentWeek, setCurrentWeek] = useState(new Date());
+    const [nutritionDialogOpen, setNutritionDialogOpen] = useState(false);
     const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
@@ -372,8 +375,19 @@ const MealPlanning: React.FC = () => {
                     >
                         <ChevronRight className="w-4 h-4" />
                     </Button>
+                    <Button size="sm" onClick={() => setNutritionDialogOpen(true)}>
+                        <Sparkles className="w-4 h-4 mr-1.5" />
+                        Analyser
+                    </Button>
                 </div>
             </div>
+
+            <NutritionAnalysisDialog
+                open={nutritionDialogOpen}
+                onOpenChange={setNutritionDialogOpen}
+                weekStart={format(weekStart, 'yyyy-MM-dd')}
+                weekEnd={format(weekEnd, 'yyyy-MM-dd')}
+            />
 
             <Card>
                 <CardContent className="p-6">

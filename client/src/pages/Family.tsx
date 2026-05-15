@@ -1,8 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Plus, Edit2, Trash2, User, Phone, Heart, AlertTriangle } from 'lucide-react';
-import { Card, CardContent, Button, Dialog, Input, Select, Textarea, Badge } from '../components/ui';
+import { Plus, Edit2, Trash2, User, Phone, Heart, AlertTriangle, Utensils } from 'lucide-react';
+import {
+    Card,
+    CardContent,
+    Button,
+    Dialog,
+    Input,
+    Select,
+    Textarea,
+    Badge,
+} from '../components/ui';
 import { DEFAULT_FAMILY_COLOR, FAMILY_COLOR_PRESETS } from '../design/colorPresets';
+
+interface DietaryPreferencesShape {
+    regime?: string;
+    spice_level?: string;
+    dislikes?: string[];
+    favorites?: string[];
+    notes?: string;
+}
 
 interface FamilyMember {
     id: string;
@@ -15,6 +32,7 @@ interface FamilyMember {
     emergency_contact_name?: string;
     emergency_contact_phone?: string;
     notes?: string;
+    dietary_preferences?: DietaryPreferencesShape;
 }
 
 const ROLES = [
@@ -22,6 +40,24 @@ const ROLES = [
     { value: 'Enfant', label: 'Enfant' },
     { value: 'Etudiant', label: 'Etudiant' },
     { value: 'Autre', label: 'Autre' },
+];
+
+const DIETARY_REGIMES = [
+    { value: '', label: '— Non précisé —' },
+    { value: 'omnivore', label: 'Omnivore' },
+    { value: 'vegetarian', label: 'Végétarien' },
+    { value: 'vegan', label: 'Végan' },
+    { value: 'halal', label: 'Halal' },
+    { value: 'kosher', label: 'Kosher' },
+    { value: 'no_pork', label: 'Sans porc' },
+];
+
+const SPICE_LEVELS = [
+    { value: '', label: '— Non précisé —' },
+    { value: 'none', label: 'Aucune épice' },
+    { value: 'mild', label: 'Doux' },
+    { value: 'medium', label: 'Moyen' },
+    { value: 'hot', label: 'Fort' },
 ];
 
 const Family: React.FC = () => {
@@ -41,6 +77,10 @@ const Family: React.FC = () => {
         emergency_contact_name: '',
         emergency_contact_phone: '',
         notes: '',
+        diet_regime: '',
+        diet_spice: '',
+        diet_dislikes: '',
+        diet_favorites: '',
     });
 
     useEffect(() => {
@@ -49,7 +89,9 @@ const Family: React.FC = () => {
 
     const loadMembers = async () => {
         try {
-            const response = await api.get<{ success: boolean; data: FamilyMember[] }>('/api/family');
+            const response = await api.get<{ success: boolean; data: FamilyMember[] }>(
+                '/api/family',
+            );
             if (response.success) {
                 setMembers(response.data);
             }
@@ -65,14 +107,31 @@ const Family: React.FC = () => {
         e.preventDefault();
         setError('');
         try {
+            const splitCsv = (s: string) =>
+                s
+                    ? s
+                          .split(',')
+                          .map((v) => v.trim())
+                          .filter(Boolean)
+                    : [];
+
+            const dietary_preferences: DietaryPreferencesShape = {};
+            if (formData.diet_regime) dietary_preferences.regime = formData.diet_regime;
+            if (formData.diet_spice) dietary_preferences.spice_level = formData.diet_spice;
+            const dislikes = splitCsv(formData.diet_dislikes);
+            if (dislikes.length) dietary_preferences.dislikes = dislikes;
+            const favorites = splitCsv(formData.diet_favorites);
+            if (favorites.length) dietary_preferences.favorites = favorites;
+
             const payload = {
                 ...formData,
-                allergies: formData.allergies ? formData.allergies.split(',').map((a) => a.trim()).filter((a) => a) : [],
-                medications: formData.medications ? formData.medications.split(',').map((m) => m.trim()).filter((m) => m) : [],
+                allergies: splitCsv(formData.allergies),
+                medications: splitCsv(formData.medications),
                 birthdate: formData.birthdate || null,
                 emergency_contact_name: formData.emergency_contact_name || null,
                 emergency_contact_phone: formData.emergency_contact_phone || null,
                 notes: formData.notes || null,
+                dietary_preferences,
             };
 
             if (editingMember) {
@@ -85,7 +144,9 @@ const Family: React.FC = () => {
             loadMembers();
         } catch (error) {
             console.error('Failed to save family member:', error);
-            setError(error instanceof Error ? error.message : 'Impossible d’enregistrer ce membre.');
+            setError(
+                error instanceof Error ? error.message : 'Impossible d’enregistrer ce membre.',
+            );
         }
     };
 
@@ -102,6 +163,7 @@ const Family: React.FC = () => {
 
     const handleEdit = (member: FamilyMember) => {
         setEditingMember(member);
+        const diet = member.dietary_preferences ?? {};
         setFormData({
             name: member.name,
             role: member.role,
@@ -112,6 +174,10 @@ const Family: React.FC = () => {
             emergency_contact_name: member.emergency_contact_name || '',
             emergency_contact_phone: member.emergency_contact_phone || '',
             notes: member.notes || '',
+            diet_regime: diet.regime || '',
+            diet_spice: diet.spice_level || '',
+            diet_dislikes: diet.dislikes?.join(', ') || '',
+            diet_favorites: diet.favorites?.join(', ') || '',
         });
         setDialogOpen(true);
     };
@@ -128,6 +194,10 @@ const Family: React.FC = () => {
             emergency_contact_name: '',
             emergency_contact_phone: '',
             notes: '',
+            diet_regime: '',
+            diet_spice: '',
+            diet_dislikes: '',
+            diet_favorites: '',
         });
     };
 
@@ -147,7 +217,9 @@ const Family: React.FC = () => {
             <div className="flex h-full items-center justify-center min-h-[50vh]">
                 <div className="flex flex-col items-center gap-4">
                     <div className="spinner-brand" />
-                    <p className="text-muted-foreground font-medium animate-pulse">Chargement de la famille...</p>
+                    <p className="text-muted-foreground font-medium animate-pulse">
+                        Chargement de la famille...
+                    </p>
                 </div>
             </div>
         );
@@ -163,9 +235,16 @@ const Family: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-h1 mb-1">Famille</h1>
-                    <p className="text-muted-foreground text-body">Gérez les membres de votre famille</p>
+                    <p className="text-muted-foreground text-body">
+                        Gérez les membres de votre famille
+                    </p>
                 </div>
-                <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+                <Button
+                    onClick={() => {
+                        resetForm();
+                        setDialogOpen(true);
+                    }}
+                >
                     <Plus className="w-4 h-4 mr-2" />
                     Ajouter un membre
                 </Button>
@@ -175,7 +254,9 @@ const Family: React.FC = () => {
                 <Card>
                     <CardContent className="p-8 text-center">
                         <User className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-                        <p className="text-muted-foreground">Aucun membre de la famille. Ajoutez votre premier membre !</p>
+                        <p className="text-muted-foreground">
+                            Aucun membre de la famille. Ajoutez votre premier membre !
+                        </p>
                     </CardContent>
                 </Card>
             ) : (
@@ -191,7 +272,9 @@ const Family: React.FC = () => {
                                         {member.name.charAt(0).toUpperCase()}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="text-body font-semibold truncate">{member.name}</h3>
+                                        <h3 className="text-body font-semibold truncate">
+                                            {member.name}
+                                        </h3>
                                         <Badge variant="primary" className="mt-1">
                                             {member.role}
                                         </Badge>
@@ -204,15 +287,20 @@ const Family: React.FC = () => {
                                 </div>
 
                                 {/* Health Information */}
-                                {(member.allergies && member.allergies.length > 0) || (member.medications && member.medications.length > 0) ? (
+                                {(member.allergies && member.allergies.length > 0) ||
+                                (member.medications && member.medications.length > 0) ? (
                                     <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                                         <div className="flex items-center gap-2 mb-2">
                                             <Heart className="h-4 w-4 text-amber-600" />
-                                            <span className="text-label font-semibold text-amber-900">Santé</span>
+                                            <span className="text-label font-semibold text-amber-900">
+                                                Santé
+                                            </span>
                                         </div>
                                         {member.allergies && member.allergies.length > 0 && (
                                             <div className="mb-2">
-                                                <p className="text-[11px] font-medium text-amber-900 mb-1">Allergies:</p>
+                                                <p className="text-[11px] font-medium text-amber-900 mb-1">
+                                                    Allergies:
+                                                </p>
                                                 <div className="flex flex-wrap gap-1">
                                                     {member.allergies.map((allergy, idx) => (
                                                         <span
@@ -227,7 +315,9 @@ const Family: React.FC = () => {
                                         )}
                                         {member.medications && member.medications.length > 0 && (
                                             <div>
-                                                <p className="text-[11px] font-medium text-amber-900 mb-1">Médicaments:</p>
+                                                <p className="text-[11px] font-medium text-amber-900 mb-1">
+                                                    Médicaments:
+                                                </p>
                                                 <div className="flex flex-wrap gap-1">
                                                     {member.medications.map((med, idx) => (
                                                         <span
@@ -248,7 +338,9 @@ const Family: React.FC = () => {
                                     <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                                         <div className="flex items-center gap-2 mb-2">
                                             <AlertTriangle className="h-4 w-4 text-red-600" />
-                                            <span className="text-label font-semibold text-red-900">Contact d'urgence</span>
+                                            <span className="text-label font-semibold text-red-900">
+                                                Contact d'urgence
+                                            </span>
                                         </div>
                                         <p className="text-body-sm text-red-900 font-medium">
                                             {member.emergency_contact_name}
@@ -270,7 +362,9 @@ const Family: React.FC = () => {
                                 {/* Notes */}
                                 {member.notes && (
                                     <div className="mb-4 p-3 bg-nexus-background rounded-lg">
-                                        <p className="text-body-sm text-muted-foreground">{member.notes}</p>
+                                        <p className="text-body-sm text-muted-foreground">
+                                            {member.notes}
+                                        </p>
                                     </div>
                                 )}
 
@@ -285,7 +379,11 @@ const Family: React.FC = () => {
                                         <Edit2 className="h-4 w-4 mr-1" />
                                         Modifier
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(member.id)}>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDelete(member.id)}
+                                    >
                                         <Trash2 className="h-4 w-4 text-red-500" />
                                     </Button>
                                 </div>
@@ -312,7 +410,9 @@ const Family: React.FC = () => {
                     />
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-label font-medium text-foreground mb-1.5">Rôle</label>
+                            <label className="block text-label font-medium text-foreground mb-1.5">
+                                Rôle
+                            </label>
                             <Select
                                 value={formData.role}
                                 onValueChange={(value) => setFormData({ ...formData, role: value })}
@@ -320,10 +420,14 @@ const Family: React.FC = () => {
                             />
                         </div>
                         <div>
-                            <label className="block text-label font-medium text-foreground mb-1.5">Couleur</label>
+                            <label className="block text-label font-medium text-foreground mb-1.5">
+                                Couleur
+                            </label>
                             <Select
                                 value={formData.color}
-                                onValueChange={(value) => setFormData({ ...formData, color: value })}
+                                onValueChange={(value) =>
+                                    setFormData({ ...formData, color: value })
+                                }
                                 options={FAMILY_COLOR_PRESETS}
                             />
                         </div>
@@ -342,13 +446,17 @@ const Family: React.FC = () => {
                         <Input
                             label="Allergies (séparées par des virgules)"
                             value={formData.allergies}
-                            onChange={(e) => setFormData({ ...formData, allergies: e.target.value })}
+                            onChange={(e) =>
+                                setFormData({ ...formData, allergies: e.target.value })
+                            }
                             placeholder="Ex: Arachides, Lactose"
                         />
                         <Input
                             label="Médicaments (séparés par des virgules)"
                             value={formData.medications}
-                            onChange={(e) => setFormData({ ...formData, medications: e.target.value })}
+                            onChange={(e) =>
+                                setFormData({ ...formData, medications: e.target.value })
+                            }
                             placeholder="Ex: Aspirine, Insuline"
                             className="mt-3"
                         />
@@ -361,15 +469,75 @@ const Family: React.FC = () => {
                         <Input
                             label="Nom du contact"
                             value={formData.emergency_contact_name}
-                            onChange={(e) => setFormData({ ...formData, emergency_contact_name: e.target.value })}
+                            onChange={(e) =>
+                                setFormData({ ...formData, emergency_contact_name: e.target.value })
+                            }
                             placeholder="Ex: Jean Dupont"
                         />
                         <Input
                             label="Téléphone du contact"
                             type="tel"
                             value={formData.emergency_contact_phone}
-                            onChange={(e) => setFormData({ ...formData, emergency_contact_phone: e.target.value })}
+                            onChange={(e) =>
+                                setFormData({
+                                    ...formData,
+                                    emergency_contact_phone: e.target.value,
+                                })
+                            }
                             placeholder="Ex: +33 6 12 34 56 78"
+                            className="mt-3"
+                        />
+                    </div>
+                    <div className="border-t pt-4">
+                        <h4 className="text-body font-semibold mb-3 flex items-center gap-2">
+                            <Utensils className="h-4 w-4 text-primary" />
+                            Préférences alimentaires
+                            <span className="text-label-sm font-normal text-muted-foreground">
+                                (utilisées par l'IA recettes)
+                            </span>
+                        </h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-label font-medium text-foreground mb-1.5">
+                                    Régime
+                                </label>
+                                <Select
+                                    value={formData.diet_regime}
+                                    onValueChange={(value) =>
+                                        setFormData({ ...formData, diet_regime: value })
+                                    }
+                                    options={DIETARY_REGIMES}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-label font-medium text-foreground mb-1.5">
+                                    Niveau d'épice
+                                </label>
+                                <Select
+                                    value={formData.diet_spice}
+                                    onValueChange={(value) =>
+                                        setFormData({ ...formData, diet_spice: value })
+                                    }
+                                    options={SPICE_LEVELS}
+                                />
+                            </div>
+                        </div>
+                        <Input
+                            label="N'aime pas (séparés par des virgules)"
+                            value={formData.diet_dislikes}
+                            onChange={(e) =>
+                                setFormData({ ...formData, diet_dislikes: e.target.value })
+                            }
+                            placeholder="Ex: Aubergine, Coriandre"
+                            className="mt-3"
+                        />
+                        <Input
+                            label="Plats / aliments favoris"
+                            value={formData.diet_favorites}
+                            onChange={(e) =>
+                                setFormData({ ...formData, diet_favorites: e.target.value })
+                            }
+                            placeholder="Ex: Yassa poulet, Mafé, Pâtes"
                             className="mt-3"
                         />
                     </div>
@@ -381,7 +549,11 @@ const Family: React.FC = () => {
                         rows={2}
                     />
                     <div className="flex justify-end gap-3 pt-4">
-                        <Button type="button" variant="secondary" onClick={() => setDialogOpen(false)}>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setDialogOpen(false)}
+                        >
                             Annuler
                         </Button>
                         <Button type="submit">{editingMember ? 'Enregistrer' : 'Ajouter'}</Button>

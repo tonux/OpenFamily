@@ -6,11 +6,17 @@ import {
     classifyShoppingItem,
     parseShoppingNaturalLanguage,
     suggestClothingForKids,
+    generateRecipesFromIngredients,
+    analyzeWeeklyMeals,
+    type RecipeMemberInput,
+    type PlannedMealLine,
 } from '../ai/AIService';
 import { AiError } from '../ai/errors';
 import {
+    analyzeWeekMealsBodySchema,
     classifyShoppingItemBodySchema,
     clothingSuggestionsBodySchema,
+    generateRecipesBodySchema,
     parseShoppingNLBodySchema,
 } from '../schemas/ai';
 import { query } from '../db';
@@ -258,6 +264,251 @@ router.post(
             }
         } catch (error) {
             sendAiError(res, error, 'dashboard_clothing');
+        }
+    },
+);
+
+/**
+ * POST /api/ai/recipes/generate
+ * Body: { ingredients[], familyMemberIds?[], cuisine?, simple?, maxTimeMinutes?, count? }
+ * Returns: { recipes: GeneratedRecipe[], cached, model }
+ *
+ * The route looks up each requested family member, merges their stored
+ * allergies + dietary_preferences into the AI prompt, and calls the heavy
+ * model for richer recipe instructions. Allergies are passed as a HARD
+ * constraint inside the system prompt; the model is told never to include
+ * a banned ingredient.
+ *
+ * Nothing is persisted by this route — the client previews the 3 recipes
+ * and POSTs the chosen one(s) to /api/recipes via the regular create endpoint.
+ */
+const ageYearsFromBirthDateOpt = (birthDate: unknown): number | undefined => {
+    if (!birthDate) return undefined;
+    const d = birthDate instanceof Date ? birthDate : new Date(`${birthDate}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return undefined;
+    const now = new Date();
+    let age = now.getFullYear() - d.getFullYear();
+    const before =
+        now.getMonth() < d.getMonth() ||
+        (now.getMonth() === d.getMonth() && now.getDate() < d.getDate());
+    if (before) age -= 1;
+    return Math.max(0, Math.min(120, age));
+};
+
+const parseAllergiesText = (raw: unknown): string[] => {
+    if (Array.isArray(raw)) {
+        return raw.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim());
+    }
+    if (typeof raw === 'string' && raw.trim()) {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                return parsed.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim());
+            }
+        } catch {
+            // Not JSON — treat as comma-separated.
+        }
+        return raw
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+    }
+    return [];
+};
+
+const parseDietaryPrefsRow = (raw: unknown): Record<string, unknown> => {
+    if (raw && typeof raw === 'object' && !Array.isArray(raw))
+        return raw as Record<string, unknown>;
+    if (typeof raw === 'string' && raw.trim()) {
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch {
+            return {};
+        }
+    }
+    return {};
+};
+
+router.post(
+    '/recipes/generate',
+    validate({ body: generateRecipesBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const body = req.body as import('../schemas/ai').GenerateRecipesBody;
+
+            // Resolve family members owned by this user. Unknown ids are silently
+            // dropped — we don't want to leak whether an id exists in someone
+            // else's family.
+            let members: RecipeMemberInput[] = [];
+            if (body.familyMemberIds && body.familyMemberIds.length > 0) {
+                const memberRows = await query(
+                    `SELECT name, birth_date, allergies, dietary_preferences
+                     FROM family_members
+                     WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+                    [req.userId, body.familyMemberIds],
+                );
+                members = memberRows.rows.map((row: any) => {
+                    const prefs = parseDietaryPrefsRow(row.dietary_preferences);
+                    return {
+                        name: row.name as string,
+                        ageYears: ageYearsFromBirthDateOpt(row.birth_date),
+                        allergies: parseAllergiesText(row.allergies),
+                        regime:
+                            typeof prefs.regime === 'string' ? (prefs.regime as any) : undefined,
+                        spice_level:
+                            typeof prefs.spice_level === 'string'
+                                ? (prefs.spice_level as any)
+                                : undefined,
+                        dislikes: Array.isArray(prefs.dislikes)
+                            ? (prefs.dislikes as string[])
+                            : undefined,
+                        favorites: Array.isArray(prefs.favorites)
+                            ? (prefs.favorites as string[])
+                            : undefined,
+                    };
+                });
+            }
+
+            const result = await generateRecipesFromIngredients(
+                {
+                    ingredients: body.ingredients,
+                    members,
+                    cuisine: body.cuisine,
+                    simple: body.simple,
+                    maxTimeMinutes: body.maxTimeMinutes,
+                    count: body.count,
+                },
+                { userId: req.userId! },
+            );
+
+            res.json({ success: true, data: result });
+        } catch (error) {
+            sendAiError(res, error, 'recipes_generate');
+        }
+    },
+);
+
+/**
+ * POST /api/ai/meals/analyze-week
+ * Body: { startDate: 'YYYY-MM-DD', endDate: 'YYYY-MM-DD' }
+ * Returns: { analysis, mealsAnalyzed, model }
+ *
+ * Pulls every meal_plan owned by the user in the [start, end] window, joins
+ * recipe + family member labels, and asks the heavy model for a structured
+ * nutritional verdict + actionable advice. Read-only — nothing is persisted.
+ *
+ * Returns 200 with `aiUnavailable: true` when AI is degraded (DISABLED /
+ * QUOTA_EXCEEDED / BAD_JSON) so the front renders an inline notice without
+ * an error banner. Hard failures still go through sendAiError.
+ */
+router.post(
+    '/meals/analyze-week',
+    validate({ body: analyzeWeekMealsBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const body = req.body as import('../schemas/ai').AnalyzeWeekMealsBody;
+
+            const mealsRow = await query(
+                `SELECT mp.date, mp.meal_type, mp.custom_meal,
+                        r.name as recipe_name, r.category as recipe_category,
+                        fm.name as family_member_name
+                 FROM meal_plans mp
+                 LEFT JOIN recipes r ON mp.recipe_id = r.id
+                 LEFT JOIN family_members fm ON mp.family_member_id = fm.id
+                 WHERE mp.user_id = $1 AND mp.date >= $2 AND mp.date <= $3
+                 ORDER BY mp.date ASC, mp.meal_type ASC`,
+                [req.userId, body.startDate, body.endDate],
+            );
+
+            // Aggregate eaters by (date, meal_type, label) so the prompt sees a
+            // single line "lundi déjeuner: Yassa pour Aïcha, Mamadou" instead of
+            // one row per family member.
+            const aggregated = new Map<string, { line: PlannedMealLine; eaters: Set<string> }>();
+            for (const row of mealsRow.rows as any[]) {
+                const dateIso =
+                    row.date instanceof Date
+                        ? row.date.toISOString().slice(0, 10)
+                        : String(row.date).slice(0, 10);
+                const label = (row.recipe_name as string | null) ?? row.custom_meal ?? null;
+                if (!label) continue; // skip empty cells
+                const key = `${dateIso}|${row.meal_type}|${label}`;
+                const existing = aggregated.get(key);
+                const eaterName =
+                    typeof row.family_member_name === 'string'
+                        ? row.family_member_name.split(' ')[0]
+                        : null;
+                if (existing) {
+                    if (eaterName) existing.eaters.add(eaterName);
+                } else {
+                    aggregated.set(key, {
+                        line: {
+                            date: dateIso,
+                            mealType: row.meal_type as string,
+                            label,
+                            recipeCategory: (row.recipe_category as string | null) ?? null,
+                        },
+                        eaters: new Set(eaterName ? [eaterName] : []),
+                    });
+                }
+            }
+
+            const meals: PlannedMealLine[] = Array.from(aggregated.values()).map(
+                ({ line, eaters }) => ({
+                    ...line,
+                    eaters: eaters.size > 0 ? Array.from(eaters) : undefined,
+                }),
+            );
+
+            // Light family summary (kids count) — gives the model context on
+            // who's eating without leaking PII.
+            const familyRow = await query(
+                `SELECT COUNT(*) FILTER (WHERE role = 'Enfant')::int AS kids,
+                        COUNT(*)::int AS total
+                 FROM family_members WHERE user_id = $1`,
+                [req.userId],
+            );
+            const fam = familyRow.rows[0] as { kids: number; total: number } | undefined;
+            const familySummary =
+                fam && fam.total > 0
+                    ? `famille de ${fam.total} personne${fam.total > 1 ? 's' : ''}` +
+                      (fam.kids > 0 ? ` dont ${fam.kids} enfant${fam.kids > 1 ? 's' : ''}` : '')
+                    : undefined;
+
+            try {
+                const result = await analyzeWeeklyMeals(
+                    {
+                        weekStartIso: body.startDate,
+                        weekEndIso: body.endDate,
+                        meals,
+                        familySummary,
+                    },
+                    { userId: req.userId! },
+                );
+                return res.json({ success: true, data: result });
+            } catch (err) {
+                if (
+                    err instanceof AiError &&
+                    (err.code === 'DISABLED' ||
+                        err.code === 'QUOTA_EXCEEDED' ||
+                        err.code === 'BAD_JSON')
+                ) {
+                    logger.info('ai.nutrition.degraded', { code: err.code });
+                    return res.json({
+                        success: true,
+                        data: {
+                            analysis: null,
+                            mealsAnalyzed: meals.length,
+                            model: '',
+                            aiUnavailable: true,
+                            code: err.code,
+                        },
+                    });
+                }
+                throw err;
+            }
+        } catch (error) {
+            sendAiError(res, error, 'meals_analyze_week');
         }
     },
 );

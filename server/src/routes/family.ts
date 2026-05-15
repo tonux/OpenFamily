@@ -12,6 +12,52 @@ const DEFAULT_COLOR = '#FF4466';
 
 const isValidHexColor = (value: string) => /^#[0-9a-fA-F]{6}$/.test(value);
 
+const ALLOWED_REGIMES = new Set(['omnivore', 'vegetarian', 'vegan', 'halal', 'kosher', 'no_pork']);
+const ALLOWED_SPICE = new Set(['none', 'mild', 'medium', 'hot']);
+
+// Coerces whatever the client sends into the schemaless DietaryPreferences shape
+// stored in jsonb. Unknown enum values are dropped (not rejected) to keep the
+// route forgiving — the AI prompt only consumes recognised fields anyway.
+const sanitizeDietaryPreferences = (input: unknown): Record<string, unknown> => {
+    if (!input || typeof input !== 'object') return {};
+    const src = input as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+
+    if (typeof src.regime === 'string' && ALLOWED_REGIMES.has(src.regime)) {
+        out.regime = src.regime;
+    }
+    if (typeof src.spice_level === 'string' && ALLOWED_SPICE.has(src.spice_level)) {
+        out.spice_level = src.spice_level;
+    }
+    const dislikes = Array.isArray(src.dislikes)
+        ? src.dislikes.filter((s) => typeof s === 'string' && s.trim()).slice(0, 30)
+        : [];
+    if (dislikes.length) out.dislikes = dislikes.map((s) => (s as string).trim());
+    const favorites = Array.isArray(src.favorites)
+        ? src.favorites.filter((s) => typeof s === 'string' && s.trim()).slice(0, 30)
+        : [];
+    if (favorites.length) out.favorites = favorites.map((s) => (s as string).trim());
+    if (typeof src.notes === 'string' && src.notes.trim()) {
+        out.notes = src.notes.trim().slice(0, 500);
+    }
+
+    return out;
+};
+
+const parseDietaryPreferences = (raw: unknown): Record<string, unknown> => {
+    if (raw && typeof raw === 'object' && !Array.isArray(raw))
+        return raw as Record<string, unknown>;
+    if (typeof raw === 'string' && raw.trim()) {
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch {
+            return {};
+        }
+    }
+    return {};
+};
+
 const serializeEmergencyContact = (name: string | null, phone: string | null): string | null => {
     if (!name && !phone) {
         return null;
@@ -71,6 +117,7 @@ const mapFamilyMember = (row: any) => {
         emergency_contact_name: emergency.name,
         emergency_contact_phone: emergency.phone,
         notes: row.notes ?? row.medical_notes ?? null,
+        dietary_preferences: parseDietaryPreferences(row.dietary_preferences),
         created_at: row.created_at,
         updated_at: row.updated_at,
     };
@@ -128,6 +175,7 @@ router.post('/', async (req: AuthRequest, res) => {
             emergency_contact_name,
             emergency_contact_phone,
             notes,
+            dietary_preferences,
         } = req.body;
 
         const cleanedName = typeof name === 'string' ? name.trim() : '';
@@ -148,6 +196,7 @@ router.post('/', async (req: AuthRequest, res) => {
         const emergencyName = toNullIfEmpty(emergency_contact_name) as string | null;
         const emergencyPhone = toNullIfEmpty(emergency_contact_phone) as string | null;
         const notesValue = toNullIfEmpty(notes);
+        const dietaryValue = sanitizeDietaryPreferences(dietary_preferences);
 
         const result = await query(
             `INSERT INTO family_members (
@@ -163,7 +212,8 @@ router.post('/', async (req: AuthRequest, res) => {
           emergency_contact_phone,
           emergency_contact,
           notes,
-          medical_notes
+          medical_notes,
+          dietary_preferences
         ) VALUES (
           $1,
           $2,
@@ -177,7 +227,8 @@ router.post('/', async (req: AuthRequest, res) => {
           $10,
           $11,
           $12,
-          $13
+          $13,
+          $14
         ) RETURNING *`,
             [
                 req.userId,
@@ -193,6 +244,7 @@ router.post('/', async (req: AuthRequest, res) => {
                 serializeEmergencyContact(emergencyName, emergencyPhone),
                 notesValue,
                 notesValue,
+                JSON.stringify(dietaryValue),
             ],
         );
 
@@ -219,6 +271,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
             emergency_contact_name,
             emergency_contact_phone,
             notes,
+            dietary_preferences,
         } = req.body;
 
         const updates: string[] = [];
@@ -306,6 +359,13 @@ router.put('/:id', async (req: AuthRequest, res) => {
             const notesValue = toNullIfEmpty(notes);
             pushUpdate('notes', notesValue);
             pushUpdate('medical_notes', notesValue);
+        }
+
+        if (dietary_preferences !== undefined) {
+            pushUpdate(
+                'dietary_preferences',
+                JSON.stringify(sanitizeDietaryPreferences(dietary_preferences)),
+            );
         }
 
         if (updates.length === 0) {

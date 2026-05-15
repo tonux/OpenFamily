@@ -37,6 +37,16 @@ import {
     buildClothingUserPrompt,
     clothingSuggestionsSystemPrompt,
 } from './prompts/clothingPrompts';
+import {
+    type RecipeGenerationInput,
+    buildRecipeGenerationUserPrompt,
+    recipeGenerationSystemPrompt,
+} from './prompts/recipePrompts';
+import {
+    type NutritionAnalysisInput,
+    buildNutritionWeeklyUserPrompt,
+    nutritionWeeklySystemPrompt,
+} from './prompts/nutritionPrompts';
 import type { WeatherSummary } from '../weather/WeatherService';
 
 let cachedProvider: BaseProvider | null = null;
@@ -509,6 +519,263 @@ export const suggestClothingForKids = async (
 export const _resetClothingCache = (): void => {
     clothingCache.clear();
 };
+
+// ---------------------------------------------------------------------------
+// Recipe generation from on-hand ingredients + family preferences
+// ---------------------------------------------------------------------------
+
+const RECIPE_CATEGORIES_VALID = new Set(['Entrée', 'Plat', 'Dessert', 'Snack']);
+const RECIPE_DIFFICULTY_VALID = new Set(['Facile', 'Moyen', 'Difficile']);
+
+export interface GeneratedRecipe {
+    name: string;
+    category: 'Entrée' | 'Plat' | 'Dessert' | 'Snack';
+    description: string;
+    ingredients: string[];
+    instructions: string[];
+    prep_time: number;
+    cook_time: number;
+    servings: number;
+    difficulty: 'Facile' | 'Moyen' | 'Difficile';
+    tags: string[];
+}
+
+export interface GenerateRecipesResult {
+    recipes: GeneratedRecipe[];
+    cached: boolean;
+    model: string;
+}
+
+const clampInt = (raw: unknown, fallback: number, min: number, max: number): number => {
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, Math.round(n)));
+};
+
+const sanitizeRecipe = (raw: unknown): GeneratedRecipe | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const name = typeof r.name === 'string' ? r.name.trim().slice(0, 120) : '';
+    if (!name) return null;
+
+    const category = (
+        typeof r.category === 'string' && RECIPE_CATEGORIES_VALID.has(r.category)
+            ? r.category
+            : 'Plat'
+    ) as GeneratedRecipe['category'];
+
+    const difficulty = (
+        typeof r.difficulty === 'string' && RECIPE_DIFFICULTY_VALID.has(r.difficulty)
+            ? r.difficulty
+            : 'Facile'
+    ) as GeneratedRecipe['difficulty'];
+
+    const ingredients = stringArray(r.ingredients, 15);
+    const instructions = stringArray(r.instructions, 12);
+    if (ingredients.length < 2 || instructions.length < 2) return null;
+
+    return {
+        name,
+        category,
+        description: typeof r.description === 'string' ? r.description.trim().slice(0, 200) : '',
+        ingredients,
+        instructions,
+        prep_time: clampInt(r.prep_time, 10, 0, 360),
+        cook_time: clampInt(r.cook_time, 15, 0, 600),
+        servings: clampInt(r.servings, 4, 1, 20),
+        difficulty,
+        tags: stringArray(r.tags, 5),
+    };
+};
+
+/**
+ * Generate up to 3 recipe propositions from a list of on-hand ingredients,
+ * scoped to the family members listed (their allergies act as hard constraints
+ * via the system prompt). The output JSON shape mirrors `Recipe` so the
+ * client can POST any chosen recipe straight to /api/recipes without
+ * transformation.
+ *
+ * No cache: the user expects variety on each call, and the cache key would
+ * cover too many dimensions (ingredients set × members × preferences).
+ * Temperature ≈ 0.7 keeps the suggestions distinct across runs.
+ */
+export const generateRecipesFromIngredients = async (
+    input: RecipeGenerationInput,
+    ctx: { userId: string },
+): Promise<GenerateRecipesResult> => {
+    if (input.ingredients.length === 0) {
+        throw new AiError('BAD_REQUEST', 'At least one ingredient is required');
+    }
+    if (input.ingredients.length > 30) {
+        throw new AiError('BAD_REQUEST', 'Too many ingredients (max 30)');
+    }
+    if (input.count < 1 || input.count > 3) {
+        throw new AiError('BAD_REQUEST', 'count must be 1, 2 or 3');
+    }
+
+    // Heavier model gives noticeably better recipes (richer instructions,
+    // better cuisine grounding). 70B is what the config calls "heavy".
+    const cfg = getAiConfig();
+    const model = cfg.models.heavy;
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: recipeGenerationSystemPrompt },
+                { role: 'user', content: buildRecipeGenerationUserPrompt(input) },
+            ],
+            temperature: 0.7,
+            // Roughly 250 tokens per recipe with margin.
+            maxTokens: 300 * input.count + 200,
+            jsonMode: true,
+            model,
+        },
+        { userId: ctx.userId, feature: 'recipes.generate', model },
+    );
+
+    const parsed = safeParseJson(response.content);
+    const rawList = (parsed as { recipes?: unknown } | null)?.recipes;
+    if (!Array.isArray(rawList)) {
+        throw new AiError('BAD_JSON', 'Model did not return a "recipes" array');
+    }
+
+    const recipes: GeneratedRecipe[] = [];
+    for (const raw of rawList) {
+        const sanitized = sanitizeRecipe(raw);
+        if (sanitized) recipes.push(sanitized);
+        if (recipes.length >= input.count) break;
+    }
+
+    if (recipes.length === 0) {
+        throw new AiError('BAD_JSON', 'Model did not return any usable recipe');
+    }
+
+    return { recipes, cached: false, model: response.model };
+};
+
+/** Re-export so routes can build the input shape with proper types. */
+export type { RecipeGenerationInput, RecipeMemberInput } from './prompts/recipePrompts';
+
+// ---------------------------------------------------------------------------
+// Weekly nutrition analysis (Meal Planning)
+// ---------------------------------------------------------------------------
+
+const NUTRITION_VERDICTS_VALID = new Set(['Excellent', 'Bon', 'À améliorer', 'Déséquilibré']);
+
+export interface NutritionRecommendation {
+    title: string;
+    detail: string;
+}
+
+export interface WeeklyNutritionAnalysis {
+    score: number;
+    verdict: 'Excellent' | 'Bon' | 'À améliorer' | 'Déséquilibré';
+    summary: string;
+    strengths: string[];
+    weaknesses: string[];
+    missingFoodGroups: string[];
+    recommendations: NutritionRecommendation[];
+}
+
+export interface AnalyzeWeeklyMealsResult {
+    analysis: WeeklyNutritionAnalysis;
+    mealsAnalyzed: number;
+    model: string;
+}
+
+const sanitizeRecommendation = (raw: unknown): NutritionRecommendation | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const title = typeof r.title === 'string' ? r.title.trim().slice(0, 80) : '';
+    const detail = typeof r.detail === 'string' ? r.detail.trim().slice(0, 220) : '';
+    if (!title || !detail) return null;
+    return { title, detail };
+};
+
+const sanitizeAnalysis = (raw: unknown): WeeklyNutritionAnalysis | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const scoreRaw = typeof r.score === 'number' ? r.score : Number(r.score);
+    const score = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, Math.round(scoreRaw))) : 0;
+
+    const verdict = (
+        typeof r.verdict === 'string' && NUTRITION_VERDICTS_VALID.has(r.verdict)
+            ? r.verdict
+            : 'À améliorer'
+    ) as WeeklyNutritionAnalysis['verdict'];
+
+    const summary = typeof r.summary === 'string' ? r.summary.trim().slice(0, 600) : '';
+    const strengths = stringArray(r.strengths, 6);
+    const weaknesses = stringArray(r.weaknesses, 6);
+    const missingFoodGroups = stringArray(r.missingFoodGroups, 8);
+
+    const recoRaw = Array.isArray(r.recommendations) ? r.recommendations : [];
+    const recommendations: NutritionRecommendation[] = [];
+    for (const item of recoRaw) {
+        if (recommendations.length >= 6) break;
+        const sanitized = sanitizeRecommendation(item);
+        if (sanitized) recommendations.push(sanitized);
+    }
+
+    if (
+        !summary &&
+        strengths.length === 0 &&
+        weaknesses.length === 0 &&
+        recommendations.length === 0
+    ) {
+        return null;
+    }
+
+    return { score, verdict, summary, strengths, weaknesses, missingFoodGroups, recommendations };
+};
+
+/**
+ * Produce a structured nutritional analysis of one week of planned meals.
+ *
+ * Uses the heavy model — analysing 30+ meal lines and producing prioritised
+ * advice benefits noticeably from a larger model. No cache: the same week can
+ * change between calls (the user is iterating on the planning), and the input
+ * is too large for a meaningful cache key.
+ */
+export const analyzeWeeklyMeals = async (
+    input: NutritionAnalysisInput,
+    ctx: { userId: string },
+): Promise<AnalyzeWeeklyMealsResult> => {
+    if (input.meals.length > 80) {
+        // Cap to keep token cost predictable. 7 days × 5 meals × 2 = plenty.
+        input = { ...input, meals: input.meals.slice(0, 80) };
+    }
+
+    const cfg = getAiConfig();
+    const model = cfg.models.heavy;
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: nutritionWeeklySystemPrompt },
+                { role: 'user', content: buildNutritionWeeklyUserPrompt(input) },
+            ],
+            temperature: 0.3,
+            maxTokens: 900,
+            jsonMode: true,
+            model,
+        },
+        { userId: ctx.userId, feature: 'meals.analyze_week', model },
+    );
+
+    const parsed = safeParseJson(response.content);
+    const analysis = sanitizeAnalysis(parsed);
+    if (!analysis) {
+        throw new AiError('BAD_JSON', 'Model did not return a usable analysis');
+    }
+
+    return { analysis, mealsAnalyzed: input.meals.length, model: response.model };
+};
+
+/** Re-export so routes can build the input shape with proper types. */
+export type { NutritionAnalysisInput, PlannedMealLine } from './prompts/nutritionPrompts';
 
 /** Exposed for tests that swap in a mock provider. */
 export const setAiProviderForTests = (provider: BaseProvider | null): void => {

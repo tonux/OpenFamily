@@ -1,7 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Plus, Search, Edit2, Trash2, Clock, Users, ChefHat, Eye } from 'lucide-react';
-import { Card, CardContent, Button, Dialog, Input, Select, Textarea, Badge } from '../components/ui';
+import { Plus, Search, Edit2, Trash2, Clock, Users, ChefHat, Eye, Sparkles } from 'lucide-react';
+import {
+    Card,
+    CardContent,
+    Button,
+    Dialog,
+    Input,
+    Select,
+    Textarea,
+    Badge,
+} from '../components/ui';
+import { GenerateRecipeDialog } from '../components/app/GenerateRecipeDialog';
 
 interface Recipe {
     id: string;
@@ -36,6 +46,7 @@ const Recipes: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+    const [aiDialogOpen, setAiDialogOpen] = useState(false);
     const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
     const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -68,7 +79,9 @@ const Recipes: React.FC = () => {
             }
         } catch (error) {
             console.error('Failed to load recipes:', error);
-            setError(error instanceof Error ? error.message : 'Impossible de charger les recettes.');
+            setError(
+                error instanceof Error ? error.message : 'Impossible de charger les recettes.',
+            );
         } finally {
             setLoading(false);
         }
@@ -85,7 +98,12 @@ const Recipes: React.FC = () => {
                 prep_time: formData.prep_time ? parseInt(formData.prep_time) : undefined,
                 cook_time: formData.cook_time ? parseInt(formData.cook_time) : undefined,
                 servings: formData.servings ? parseInt(formData.servings) : undefined,
-                tags: formData.tags ? formData.tags.split(',').map((t) => t.trim()).filter((t) => t) : [],
+                tags: formData.tags
+                    ? formData.tags
+                          .split(',')
+                          .map((t) => t.trim())
+                          .filter((t) => t)
+                    : [],
             };
 
             if (editingRecipe) {
@@ -98,7 +116,9 @@ const Recipes: React.FC = () => {
             loadRecipes();
         } catch (error) {
             console.error('Failed to save recipe:', error);
-            setError(error instanceof Error ? error.message : 'Impossible d’enregistrer cette recette.');
+            setError(
+                error instanceof Error ? error.message : 'Impossible d’enregistrer cette recette.',
+            );
         }
     };
 
@@ -109,7 +129,9 @@ const Recipes: React.FC = () => {
             loadRecipes();
         } catch (error) {
             console.error('Failed to delete recipe:', error);
-            setError(error instanceof Error ? error.message : 'Impossible de supprimer cette recette.');
+            setError(
+                error instanceof Error ? error.message : 'Impossible de supprimer cette recette.',
+            );
         }
     };
 
@@ -193,7 +215,9 @@ const Recipes: React.FC = () => {
             <div className="flex h-full items-center justify-center min-h-[50vh]">
                 <div className="flex flex-col items-center gap-4">
                     <div className="spinner-brand" />
-                    <p className="text-muted-foreground font-medium animate-pulse">Chargement des recettes...</p>
+                    <p className="text-muted-foreground font-medium animate-pulse">
+                        Chargement des recettes...
+                    </p>
                 </div>
             </div>
         );
@@ -209,13 +233,32 @@ const Recipes: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-h1 mb-1">Recettes</h1>
-                    <p className="text-muted-foreground text-body">Votre bibliothèque de recettes familiales</p>
+                    <p className="text-muted-foreground text-body">
+                        Votre bibliothèque de recettes familiales
+                    </p>
                 </div>
-                <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nouvelle recette
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="secondary" onClick={() => setAiDialogOpen(true)}>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Générer avec l'IA
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            resetForm();
+                            setDialogOpen(true);
+                        }}
+                    >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Nouvelle recette
+                    </Button>
+                </div>
             </div>
+
+            <GenerateRecipeDialog
+                open={aiDialogOpen}
+                onOpenChange={setAiDialogOpen}
+                onRecipeSaved={loadRecipes}
+            />
 
             {/* Filters */}
             <Card>
@@ -259,13 +302,18 @@ const Recipes: React.FC = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredRecipes.map((recipe) => (
-                        <Card key={recipe.id} className="hover:shadow-lg transition-shadow overflow-hidden">
+                        <Card
+                            key={recipe.id}
+                            className="hover:shadow-lg transition-shadow overflow-hidden"
+                        >
                             <div className="h-40 bg-gradient-to-br from-nexus-blue/10 to-nexus-amber/10 flex items-center justify-center">
                                 <ChefHat className="h-16 w-16 text-nexus-blue/30" />
                             </div>
                             <CardContent className="p-4">
                                 <div className="flex items-start justify-between mb-2">
-                                    <h3 className="text-body font-semibold flex-1">{recipe.name}</h3>
+                                    <h3 className="text-body font-semibold flex-1">
+                                        {recipe.name}
+                                    </h3>
                                 </div>
                                 {recipe.description && (
                                     <p className="text-body-sm text-muted-foreground mb-3 line-clamp-2">
@@ -273,7 +321,9 @@ const Recipes: React.FC = () => {
                                     </p>
                                 )}
                                 <div className="flex flex-wrap gap-2 mb-3">
-                                    <Badge variant={getCategoryColor(recipe.category)}>{recipe.category}</Badge>
+                                    <Badge variant={getCategoryColor(recipe.category)}>
+                                        {recipe.category}
+                                    </Badge>
                                     {recipe.difficulty && (
                                         <Badge variant={getDifficultyColor(recipe.difficulty)}>
                                             {recipe.difficulty}
@@ -304,10 +354,18 @@ const Recipes: React.FC = () => {
                                         <Eye className="h-4 w-4 mr-1" />
                                         Voir
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleEdit(recipe)}>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleEdit(recipe)}
+                                    >
                                         <Edit2 className="h-4 w-4" />
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(recipe.id)}>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDelete(recipe.id)}
+                                    >
                                         <Trash2 className="h-4 w-4 text-red-500" />
                                     </Button>
                                 </div>
@@ -339,7 +397,9 @@ const Recipes: React.FC = () => {
                             </label>
                             <Select
                                 value={formData.category}
-                                onValueChange={(value) => setFormData({ ...formData, category: value })}
+                                onValueChange={(value) =>
+                                    setFormData({ ...formData, category: value })
+                                }
                                 options={CATEGORIES}
                             />
                         </div>
@@ -349,7 +409,9 @@ const Recipes: React.FC = () => {
                             </label>
                             <Select
                                 value={formData.difficulty}
-                                onValueChange={(value) => setFormData({ ...formData, difficulty: value })}
+                                onValueChange={(value) =>
+                                    setFormData({ ...formData, difficulty: value })
+                                }
                                 options={DIFFICULTIES}
                             />
                         </div>
@@ -366,14 +428,18 @@ const Recipes: React.FC = () => {
                             label="Préparation (min)"
                             type="number"
                             value={formData.prep_time}
-                            onChange={(e) => setFormData({ ...formData, prep_time: e.target.value })}
+                            onChange={(e) =>
+                                setFormData({ ...formData, prep_time: e.target.value })
+                            }
                             placeholder="30"
                         />
                         <Input
                             label="Cuisson (min)"
                             type="number"
                             value={formData.cook_time}
-                            onChange={(e) => setFormData({ ...formData, cook_time: e.target.value })}
+                            onChange={(e) =>
+                                setFormData({ ...formData, cook_time: e.target.value })
+                            }
                             placeholder="45"
                         />
                         <Input
@@ -407,7 +473,11 @@ const Recipes: React.FC = () => {
                         placeholder="végétarien, rapide, économique"
                     />
                     <div className="flex justify-end gap-3 pt-4">
-                        <Button type="button" variant="secondary" onClick={() => setDialogOpen(false)}>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setDialogOpen(false)}
+                        >
                             Annuler
                         </Button>
                         <Button type="submit">{editingRecipe ? 'Enregistrer' : 'Créer'}</Button>
@@ -444,13 +514,17 @@ const Recipes: React.FC = () => {
                             {viewingRecipe.prep_time && (
                                 <div>
                                     <span className="text-muted-foreground">Préparation:</span>{' '}
-                                    <span className="font-medium">{viewingRecipe.prep_time} min</span>
+                                    <span className="font-medium">
+                                        {viewingRecipe.prep_time} min
+                                    </span>
                                 </div>
                             )}
                             {viewingRecipe.cook_time && (
                                 <div>
                                     <span className="text-muted-foreground">Cuisson:</span>{' '}
-                                    <span className="font-medium">{viewingRecipe.cook_time} min</span>
+                                    <span className="font-medium">
+                                        {viewingRecipe.cook_time} min
+                                    </span>
                                 </div>
                             )}
                             {viewingRecipe.servings && (

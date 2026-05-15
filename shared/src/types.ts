@@ -36,6 +36,22 @@ export interface FamilyMember extends BaseEntity {
     emergency_contact?: string;
     medical_notes?: string;
     avatar_url?: string;
+    dietary_preferences?: DietaryPreferences;
+}
+
+// Dietary preferences — consumed by the AI recipe generator and (future)
+// smart meal planning. Persisted as jsonb on family_members; every key is
+// optional so the form can grow without breaking older rows.
+export type DietaryRegime = 'omnivore' | 'vegetarian' | 'vegan' | 'halal' | 'kosher' | 'no_pork';
+
+export type SpiceLevel = 'none' | 'mild' | 'medium' | 'hot';
+
+export interface DietaryPreferences {
+    regime?: DietaryRegime;
+    dislikes?: string[];
+    favorites?: string[];
+    spice_level?: SpiceLevel;
+    notes?: string;
 }
 
 // Shopping Item
