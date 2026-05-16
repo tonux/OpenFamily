@@ -1,9 +1,9 @@
-# OpenFamily — Documentation complète
+# KeurTonux — Documentation complète
 
 ## Sommaire
 
 1. [Présentation](#présentation)
-2. [À quoi sert OpenFamily ?](#à-quoi-sert-openfamily-)
+2. [À quoi sert KeurTonux ?](#à-quoi-sert-keurtonux-)
 3. [Fonctionnalités détaillées](#fonctionnalités-détaillées)
 4. [Architecture technique](#architecture-technique)
 5. [Technologies utilisées](#technologies-utilisées)
@@ -16,7 +16,7 @@
 
 ## Présentation
 
-**OpenFamily** est une application **open source** de gestion familiale développée par **NexaFlow France**. Elle est conçue pour être **auto-hébergée** (self-hosted), ce qui signifie que chaque famille peut la déployer sur son propre serveur et garder le **contrôle total de ses données personnelles**.
+**KeurTonux** est une application **open source** de gestion familiale développée par **NexaFlow France**. Elle est conçue pour être **auto-hébergée** (self-hosted), ce qui signifie que chaque famille peut la déployer sur son propre serveur et garder le **contrôle total de ses données personnelles**.
 
 L'application est accessible depuis n'importe quel appareil (ordinateur, tablette, smartphone) grâce à son interface web responsive et sa nature de **Progressive Web App (PWA)**, qui permet de l'installer directement sur l'écran d'accueil d'un téléphone ou d'un ordinateur, comme une application native.
 
@@ -24,9 +24,9 @@ Le projet est distribué sous **licence GNU AGPL v3**.
 
 ---
 
-## À quoi sert OpenFamily ?
+## À quoi sert KeurTonux ?
 
-OpenFamily centralise l'ensemble de l'organisation d'un foyer en un seul outil. Plutôt que de jongler entre plusieurs applications (agenda, liste de courses, budget, recettes…), OpenFamily regroupe tout au même endroit, accessible à tous les membres de la famille.
+KeurTonux centralise l'ensemble de l'organisation d'un foyer en un seul outil. Plutôt que de jongler entre plusieurs applications (agenda, liste de courses, budget, recettes…), KeurTonux regroupe tout au même endroit, accessible à tous les membres de la famille.
 
 **Cas d'usage typiques :**
 
@@ -42,6 +42,7 @@ OpenFamily centralise l'ensemble de l'organisation d'un foyer en un seul outil. 
 ## Fonctionnalités détaillées
 
 ### 🛒 Liste de courses
+
 - Ajout d'articles avec nom, quantité, unité et prix estimé
 - **Catégorisation automatique** : Alimentation, Bébé, Ménage, Santé, Autre
 - Système de **templates** (modèles) pour les courses récurrentes
@@ -49,6 +50,7 @@ OpenFamily centralise l'ensemble de l'organisation d'un foyer en un seul outil. 
 - Notes optionnelles par article
 
 ### ✅ Gestion des tâches
+
 - Création de tâches avec titre, description et date d'échéance
 - **Tâches récurrentes** : quotidiennes, hebdomadaires, mensuelles ou annuelles
 - **3 niveaux de priorité** : Basse, Moyenne, Haute
@@ -56,6 +58,7 @@ OpenFamily centralise l'ensemble de l'organisation d'un foyer en un seul outil. 
 - Suivi de l'avancement et statistiques de complétion
 
 ### 📅 Calendrier / Rendez-vous
+
 - Vue calendrier mensuelle avec code couleur par membre
 - Création de rendez-vous avec heure de début/fin, lieu et description
 - **Rappels automatiques** configurables (30 min avant, 1h avant)
@@ -63,12 +66,14 @@ OpenFamily centralise l'ensemble de l'organisation d'un foyer en un seul outil. 
 - Notes complémentaires par événement
 
 ### 🗓️ Planning hebdomadaire
+
 - Gestion des emplois du temps de chaque membre de la famille
 - Support de deux types : emploi du temps **professionnel** et **scolaire**
 - Créneaux horaires par jour de la semaine (lundi → dimanche)
 - Indication du lieu pour chaque créneau
 
 ### 🍳 Bibliothèque de recettes
+
 - Ajout de recettes avec ingrédients, instructions pas à pas et photo
 - **Catégories** : Entrée, Plat, Dessert, Snack
 - **Niveaux de difficulté** : Facile, Moyen, Difficile
@@ -76,12 +81,14 @@ OpenFamily centralise l'ensemble de l'organisation d'un foyer en un seul outil. 
 - Système de **tags** pour le filtrage avancé
 
 ### 🍽️ Planning des repas
+
 - Vue **hebdomadaire** des repas (petit-déjeuner, déjeuner, dîner, snack)
 - Liaison directe avec les recettes de la bibliothèque
 - Possibilité d'ajouter un repas personnalisé (hors recette)
 - Notes par repas
 
 ### 💰 Gestion du budget
+
 - Suivi des **revenus** et **dépenses** du foyer
 - **6 catégories** : Alimentation, Santé, Enfants, Maison, Loisirs, Autre
 - Définition de **limites mensuelles** par catégorie
@@ -90,16 +97,19 @@ OpenFamily centralise l'ensemble de l'organisation d'un foyer en un seul outil. 
 - Vue mensuelle avec comparaison budget prévu vs réel
 
 ### 👨‍👩‍👧‍👦 Gestion de la famille
+
 - Profil détaillé pour chaque membre : nom, date de naissance, couleur, avatar
 - **Informations de santé** : groupe sanguin, allergies, médicaments, vaccins, notes médicales
 - **Contacts d'urgence** par membre
 - Rôles familiaux configurables
 
 ### ⚙️ Paramètres
+
 - Export / import des données (transfert de données)
 - Personnalisation de l'application
 
 ### 📊 Tableau de bord (Dashboard)
+
 - Vue d'ensemble de l'activité familiale
 - Résumé des tâches en cours, prochains rendez-vous, budget du mois
 - Accès rapide à tous les modules
@@ -108,7 +118,7 @@ OpenFamily centralise l'ensemble de l'organisation d'un foyer en un seul outil. 
 
 ## Architecture technique
 
-OpenFamily suit une architecture **client-serveur classique en 3 tiers** :
+KeurTonux suit une architecture **client-serveur classique en 3 tiers** :
 
 ```
 ┌──────────────────┐     HTTP / WS     ┌──────────────────┐     SQL      ┌──────────────────┐
@@ -118,7 +128,7 @@ OpenFamily suit une architecture **client-serveur classique en 3 tiers** :
 │                  │                   │                  │              │                  │
 └──────────────────┘                   └──────────────────┘              └──────────────────┘
      Port 3000                              Port 3001                       Port 5432
-    (Nginx prod)                                                      
+    (Nginx prod)
 ```
 
 ### Flux de communication
@@ -130,8 +140,9 @@ OpenFamily suit une architecture **client-serveur classique en 3 tiers** :
 ### Monorepo avec workspaces npm
 
 Le projet utilise les **npm workspaces** pour structurer le code en 3 packages :
-- `@openfamily/client` — l'application frontend
-- `@openfamily/server` — l'API backend
+
+- `@keurtonux/client` — l'application frontend
+- `@keurtonux/server` — l'API backend
 - `shared/` — les types TypeScript et constantes partagés entre client et serveur
 
 ---
@@ -140,47 +151,47 @@ Le projet utilise les **npm workspaces** pour structurer le code en 3 packages :
 
 ### Frontend
 
-| Technologie | Version | Rôle |
-|---|---|---|
-| **React** | 19 | Bibliothèque UI (composants, état, rendu) |
-| **TypeScript** | 5.3+ | Typage statique du code JavaScript |
-| **Vite** | 7 | Bundler et serveur de développement ultra-rapide |
-| **TailwindCSS** | 3.4 | Framework CSS utility-first pour le styling |
-| **Radix UI** | — | Composants UI accessibles et non stylés (Dialog, Select, Switch, Tabs, Toast…) |
-| **React Router** | 6 | Routage côté client (SPA) |
-| **React Hook Form** | 7 | Gestion des formulaires avec validation |
-| **Zod** | 3 | Schémas de validation des données |
-| **Recharts** | 2 | Graphiques et visualisations (budget, statistiques) |
-| **Framer Motion** | 10 | Animations et transitions fluides |
-| **date-fns** | 3 | Manipulation et formatage des dates |
-| **Lucide React** | — | Bibliothèque d'icônes SVG |
-| **vite-plugin-pwa** | — | Support PWA (Service Worker, manifest, offline) |
-| **class-variance-authority** | — | Gestion de variants CSS pour les composants |
+| Technologie                  | Version | Rôle                                                                           |
+| ---------------------------- | ------- | ------------------------------------------------------------------------------ |
+| **React**                    | 19      | Bibliothèque UI (composants, état, rendu)                                      |
+| **TypeScript**               | 5.3+    | Typage statique du code JavaScript                                             |
+| **Vite**                     | 7       | Bundler et serveur de développement ultra-rapide                               |
+| **TailwindCSS**              | 3.4     | Framework CSS utility-first pour le styling                                    |
+| **Radix UI**                 | —       | Composants UI accessibles et non stylés (Dialog, Select, Switch, Tabs, Toast…) |
+| **React Router**             | 6       | Routage côté client (SPA)                                                      |
+| **React Hook Form**          | 7       | Gestion des formulaires avec validation                                        |
+| **Zod**                      | 3       | Schémas de validation des données                                              |
+| **Recharts**                 | 2       | Graphiques et visualisations (budget, statistiques)                            |
+| **Framer Motion**            | 10      | Animations et transitions fluides                                              |
+| **date-fns**                 | 3       | Manipulation et formatage des dates                                            |
+| **Lucide React**             | —       | Bibliothèque d'icônes SVG                                                      |
+| **vite-plugin-pwa**          | —       | Support PWA (Service Worker, manifest, offline)                                |
+| **class-variance-authority** | —       | Gestion de variants CSS pour les composants                                    |
 
 ### Backend
 
-| Technologie | Version | Rôle |
-|---|---|---|
-| **Node.js** | 20+ | Runtime JavaScript côté serveur |
-| **Express** | 4.18 | Framework HTTP pour l'API REST |
-| **TypeScript** | 5.3+ | Typage statique |
-| **PostgreSQL** | 16 | Base de données relationnelle |
-| **pg (node-postgres)** | 8 | Driver PostgreSQL pour Node.js |
-| **JSON Web Token (JWT)** | 9 | Authentification stateless |
-| **bcrypt** | 6 | Hachage sécurisé des mots de passe |
-| **ws** | 8 | Serveur WebSocket natif |
-| **web-push** | 3.6 | Notifications push (protocole Web Push / VAPID) |
-| **dotenv** | 16 | Chargement des variables d'environnement |
-| **tsx** | 4 | Exécution directe de TypeScript en développement |
+| Technologie              | Version | Rôle                                             |
+| ------------------------ | ------- | ------------------------------------------------ |
+| **Node.js**              | 20+     | Runtime JavaScript côté serveur                  |
+| **Express**              | 4.18    | Framework HTTP pour l'API REST                   |
+| **TypeScript**           | 5.3+    | Typage statique                                  |
+| **PostgreSQL**           | 16      | Base de données relationnelle                    |
+| **pg (node-postgres)**   | 8       | Driver PostgreSQL pour Node.js                   |
+| **JSON Web Token (JWT)** | 9       | Authentification stateless                       |
+| **bcrypt**               | 6       | Hachage sécurisé des mots de passe               |
+| **ws**                   | 8       | Serveur WebSocket natif                          |
+| **web-push**             | 3.6     | Notifications push (protocole Web Push / VAPID)  |
+| **dotenv**               | 16      | Chargement des variables d'environnement         |
+| **tsx**                  | 4       | Exécution directe de TypeScript en développement |
 
 ### DevOps / Infrastructure
 
-| Technologie | Rôle |
-|---|---|
-| **Docker** | Conteneurisation de chaque service |
-| **Docker Compose** | Orchestration des 3 services (client, server, postgres) |
-| **Nginx** | Serveur de fichiers statiques en production (client) |
-| **Multi-stage builds** | Images Docker optimisées (build → runtime) |
+| Technologie            | Rôle                                                    |
+| ---------------------- | ------------------------------------------------------- |
+| **Docker**             | Conteneurisation de chaque service                      |
+| **Docker Compose**     | Orchestration des 3 services (client, server, postgres) |
+| **Nginx**              | Serveur de fichiers statiques en production (client)    |
+| **Multi-stage builds** | Images Docker optimisées (build → runtime)              |
 
 ### Mobile (Capacitor)
 
@@ -191,7 +202,7 @@ Le projet inclut des dossiers `android/` et `ios/`, indiquant un support mobile 
 ## Structure du projet
 
 ```
-OpenFamily/
+KeurTonux/
 ├── client/                    # Application frontend React
 │   ├── Dockerfile             # Image Docker du client (Nginx)
 │   ├── nginx.conf             # Configuration Nginx de production
@@ -276,27 +287,28 @@ OpenFamily/
 
 ## Base de données
 
-OpenFamily utilise **PostgreSQL 16** avec le schéma suivant :
+KeurTonux utilise **PostgreSQL 16** avec le schéma suivant :
 
 ### Tables principales
 
-| Table | Description |
-|---|---|
-| `users` | Comptes utilisateurs (email, mot de passe hashé, nom) |
-| `family_members` | Membres de la famille rattachés à un utilisateur |
-| `shopping_items` | Articles de la liste de courses |
-| `shopping_list_templates` | Modèles de listes de courses (JSONB) |
-| `tasks` | Tâches avec priorité, récurrence et assignation |
-| `appointments` | Rendez-vous avec rappels |
-| `schedule_entries` | Créneaux du planning hebdomadaire |
-| `recipes` | Recettes (ingrédients et instructions en JSONB) |
-| `meal_plans` | Planning des repas (lié aux recettes) |
-| `budget_entries` | Revenus et dépenses |
-| `budget_limits` | Limites mensuelles par catégorie |
-| `notifications` | Notifications internes |
-| `push_subscriptions` | Abonnements push (Web Push / VAPID) |
+| Table                     | Description                                           |
+| ------------------------- | ----------------------------------------------------- |
+| `users`                   | Comptes utilisateurs (email, mot de passe hashé, nom) |
+| `family_members`          | Membres de la famille rattachés à un utilisateur      |
+| `shopping_items`          | Articles de la liste de courses                       |
+| `shopping_list_templates` | Modèles de listes de courses (JSONB)                  |
+| `tasks`                   | Tâches avec priorité, récurrence et assignation       |
+| `appointments`            | Rendez-vous avec rappels                              |
+| `schedule_entries`        | Créneaux du planning hebdomadaire                     |
+| `recipes`                 | Recettes (ingrédients et instructions en JSONB)       |
+| `meal_plans`              | Planning des repas (lié aux recettes)                 |
+| `budget_entries`          | Revenus et dépenses                                   |
+| `budget_limits`           | Limites mensuelles par catégorie                      |
+| `notifications`           | Notifications internes                                |
+| `push_subscriptions`      | Abonnements push (Web Push / VAPID)                   |
 
 ### Caractéristiques techniques
+
 - **UUIDs** (v4) comme clés primaires pour toutes les tables
 - **Contraintes d'intégrité** : foreign keys avec `ON DELETE CASCADE` ou `ON DELETE SET NULL`
 - **Index** optimisés sur les colonnes fréquemment requêtées
@@ -308,14 +320,14 @@ OpenFamily utilise **PostgreSQL 16** avec le schéma suivant :
 
 ## Sécurité
 
-| Mécanisme | Détail |
-|---|---|
-| **Authentification** | JWT (JSON Web Token) avec expiration à 7 jours |
-| **Hachage des mots de passe** | bcrypt (coût adaptatif) |
-| **CORS** | Origines configurables via variable d'environnement |
-| **Isolation des données** | Chaque requête est filtrée par `user_id` — un utilisateur ne voit que ses propres données |
-| **Variables d'environnement** | Les secrets (JWT_SECRET, mots de passe DB, clés VAPID) ne sont jamais codés en dur |
-| **HTTPS** | Recommandé en production (nécessaire pour les notifications push et le service worker) |
+| Mécanisme                     | Détail                                                                                    |
+| ----------------------------- | ----------------------------------------------------------------------------------------- |
+| **Authentification**          | JWT (JSON Web Token) avec expiration à 7 jours                                            |
+| **Hachage des mots de passe** | bcrypt (coût adaptatif)                                                                   |
+| **CORS**                      | Origines configurables via variable d'environnement                                       |
+| **Isolation des données**     | Chaque requête est filtrée par `user_id` — un utilisateur ne voit que ses propres données |
+| **Variables d'environnement** | Les secrets (JWT_SECRET, mots de passe DB, clés VAPID) ne sont jamais codés en dur        |
+| **HTTPS**                     | Recommandé en production (nécessaire pour les notifications push et le service worker)    |
 
 ---
 
@@ -325,14 +337,14 @@ OpenFamily utilise **PostgreSQL 16** avec le schéma suivant :
 
 L'application se déploie en **3 conteneurs Docker** orchestrés par Docker Compose :
 
-1. **openfamily-db** — PostgreSQL 16 Alpine, avec initialisation automatique du schéma
-2. **openfamily-server** — API Node.js/Express, avec health check intégré
-3. **openfamily-client** — Fichiers statiques React servis par Nginx
+1. **keurtonux-db** — PostgreSQL 16 Alpine, avec initialisation automatique du schéma
+2. **keurtonux-server** — API Node.js/Express, avec health check intégré
+3. **keurtonux-client** — Fichiers statiques React servis par Nginx
 
 ```bash
 # Cloner et configurer
-git clone https://github.com/NexaFlowFrance/OpenFamily.git
-cd OpenFamily
+git clone https://github.com/NexaFlowFrance/KeurTonux.git
+cd KeurTonux
 cp .env.example .env  # Configurer les variables
 
 # Démarrer
@@ -344,6 +356,7 @@ npm run smoke:api
 ```
 
 **Ports par défaut :**
+
 - Frontend : `http://localhost:3000`
 - API : `http://localhost:3001`
 - PostgreSQL : `localhost:5432`
@@ -359,6 +372,6 @@ npm run dev             # Lance client (port 5173) + serveur (port 3001)
 
 ---
 
-> **Dépôt GitHub** : [https://github.com/NexaFlowFrance/OpenFamily](https://github.com/NexaFlowFrance/OpenFamily)
+> **Dépôt GitHub** : [https://github.com/NexaFlowFrance/KeurTonux](https://github.com/NexaFlowFrance/KeurTonux)
 > **Licence** : GNU AGPL v3
 > **Auteur** : NexaFlow France

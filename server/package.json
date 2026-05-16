@@ -1,7 +1,7 @@
 {
-  "name": "@openfamily/server",
+  "name": "@keurtonux/server",
   "version": "1.0.5",
-  "description": "OpenFamily backend server",
+  "description": "KeurTonux backend server",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

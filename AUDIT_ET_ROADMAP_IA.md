@@ -1,4 +1,4 @@
-# OpenFamily — Audit technique & Roadmap IA
+# KeurTonux — Audit technique & Roadmap IA
 
 > Document de travail interne — Mai 2026
 > Périmètre : audit complet du code existant + proposition de fonctionnalités IA (API cloud) et non-IA pour usage personnel optimisé et différenciation produit.
@@ -225,7 +225,7 @@ Laisser l'utilisateur choisir via les settings : provider + modèle + clé API.
 - **i18n complet** (FR + EN + ES + DE minimum) avec `react-i18next`. **Indispensable pour adoption open source.**
 - **Thèmes utilisateur** (les color presets existent déjà, exposer un picker complet + import/export).
 - **Backups automatiques** : `pg_dump` quotidien chiffré dans un dossier configurable (S3/Backblaze optionnel), rotation 30 jours.
-- **CLI d'administration** : `openfamily-cli reset-password`, `create-admin`, `import`, `backup`, `migrate`. Aide énorme pour le self-host.
+- **CLI d'administration** : `keurtonux-cli reset-password`, `create-admin`, `import`, `backup`, `migrate`. Aide énorme pour le self-host.
 - **Dashboard d'administration** (pour le owner du serveur) : nombre de users, espace disque, état des backups, logs récents.
 
 ---
@@ -265,7 +265,7 @@ Laisser l'utilisateur choisir via les settings : provider + modèle + clé API.
 - [ ] Feature IA #5 — Planning repas hebdo généré.
 - [ ] Feature IA #6 — Assistant chat avec function calling (MVP : create_task, add_shopping_item, create_appointment).
 
-À l'issue de ces 3 sprints, OpenFamily est passé de "app perso bien faite mais isolée" à "**plateforme familiale collaborative avec IA**" — positionnement difficilement copiable par Bring!, Cozi ou Tody dans l'année.
+À l'issue de ces 3 sprints, KeurTonux est passé de "app perso bien faite mais isolée" à "**plateforme familiale collaborative avec IA**" — positionnement difficilement copiable par Bring!, Cozi ou Tody dans l'année.
 
 ---
 

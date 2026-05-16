@@ -55,14 +55,14 @@ export const wrapEmail = (params: {
     <tr><td align="center">
       <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
         <tr><td style="padding:24px 28px 8px 28px;">
-          <p style="margin:0;font-size:14px;color:#71717a;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;">OpenFamily</p>
+          <p style="margin:0;font-size:14px;color:#71717a;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;">KeurTonux</p>
         </td></tr>
         <tr><td style="padding:0 28px 24px 28px;">
           ${bodyHtml}
         </td></tr>
         <tr><td style="padding:16px 28px 24px 28px;border-top:1px solid #f4f4f5;">
           <p style="margin:0;font-size:12px;line-height:1.5;color:#a1a1aa;">
-            Vous recevez cet email parce que les notifications par email sont activées sur votre compte OpenFamily.
+            Vous recevez cet email parce que les notifications par email sont activées sur votre compte KeurTonux.
             <br>
             <a href="${escapeHtml(settingsUrl)}" style="color:#71717a;text-decoration:underline;">Gérer mes préférences</a>
           </p>

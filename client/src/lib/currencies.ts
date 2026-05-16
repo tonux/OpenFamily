@@ -1,5 +1,5 @@
 // Mirror of shared/src/constants.ts SUPPORTED_CURRENCIES.
-// Kept in sync manually because the @openfamily/shared workspace isn't wired in the client bundle.
+// Kept in sync manually because the @keurtonux/shared workspace isn't wired in the client bundle.
 export interface CurrencyDefinition {
     code: string;
     name: string;

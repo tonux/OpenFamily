@@ -92,7 +92,7 @@ export const renderDigestEmail = (
       <p style="margin:0 0 16px 0;font-size:14px;color:#52525b;">Vous avez ${total} notification${total > 1 ? 's' : ''} en attente :</p>
       ${sectionsHtml}
       <p style="margin:24px 0 0 0;">
-        <a href="${escapeHtml(baseUrl)}" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;">Ouvrir OpenFamily</a>
+        <a href="${escapeHtml(baseUrl)}" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;">Ouvrir KeurTonux</a>
       </p>
     `;
 
@@ -112,7 +112,7 @@ export const renderDigestEmail = (
         }
         textLines.push('');
     }
-    textLines.push(`Ouvrir OpenFamily : ${baseUrl}`);
+    textLines.push(`Ouvrir KeurTonux : ${baseUrl}`);
     textLines.push('');
     textLines.push(`Gérer mes préférences : ${settingsUrl}`);
 

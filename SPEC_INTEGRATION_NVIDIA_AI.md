@@ -9,7 +9,7 @@
 
 ## 0. Résumé exécutif
 
-L'objectif est d'introduire dans OpenFamily une **couche IA propre, isolée et substituable**, accessible via les endpoints OpenAI-compatibles de NVIDIA NIM. La clé API est globale (`.env` serveur), donc une seule entité paye et tout le foyer en profite. L'architecture est conçue pour que migrer plus tard vers Anthropic, OpenAI ou Mistral demande juste d'ajouter un fichier provider — pas de réécrire les features.
+L'objectif est d'introduire dans KeurTonux une **couche IA propre, isolée et substituable**, accessible via les endpoints OpenAI-compatibles de NVIDIA NIM. La clé API est globale (`.env` serveur), donc une seule entité paye et tout le foyer en profite. L'architecture est conçue pour que migrer plus tard vers Anthropic, OpenAI ou Mistral demande juste d'ajouter un fichier provider — pas de réécrire les features.
 
 **Décision modèle :** `meta/llama-3.1-8b-instruct` est petit, rapide et bon marché — c'est un excellent choix pour les tâches simples (classification, extraction structurée courte, NLU léger). En revanche il **n'est pas optimal** pour le chat conversationnel multi-tours avec function calling complexe ni pour la génération de planning hebdo cohérent. La spec prévoit donc un **système de tiers** : Llama 3.1 8B par défaut, escalade automatique vers un modèle plus gros sur les features qui en ont besoin, avec un seul endroit à modifier.
 
@@ -28,7 +28,7 @@ L'objectif est d'introduire dans OpenFamily une **couche IA propre, isolée et s
 
 Header `Authorization: Bearer nvapi-…`. La clé commence par `nvapi-`. Rien de plus.
 
-### Modèles pertinents pour OpenFamily (à mai 2026)
+### Modèles pertinents pour KeurTonux (à mai 2026)
 
 | Modèle                                   | Cas d'usage idéal                                  | Function calling | Vision  | Note                                                                              |
 | ---------------------------------------- | -------------------------------------------------- | ---------------- | ------- | --------------------------------------------------------------------------------- |
@@ -45,7 +45,7 @@ Header `Authorization: Bearer nvapi-…`. La clé commence par `nvapi-`. Rien de
 - **Function calling** : fonctionne, mais hallucinations sur les noms de paramètres possibles si plus de 3-4 tools simultanés. Garder les `tools` short et bien décrits.
 - **Sortie JSON** : utiliser `response_format: { type: "json_object" }` + un exemple dans le prompt. Sans ça, ~5% des réponses incluent du texte parasite avant/après le JSON.
 - **Streaming** : supporté. Bonne UX en chat.
-- **Français** : correct mais inférieur à Mistral Large / Llama 70B sur les nuances. Acceptable pour les features OpenFamily car les outputs sont courts et structurés.
+- **Français** : correct mais inférieur à Mistral Large / Llama 70B sur les nuances. Acceptable pour les features KeurTonux car les outputs sont courts et structurés.
 
 ---
 

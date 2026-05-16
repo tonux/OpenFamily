@@ -1,6 +1,7 @@
-# Guide d'installation OpenFamily
+# Guide d'installation KeurTonux
 
 Ce guide couvre:
+
 - un run local rapide avec Docker
 - un run developpement local (code sur machine, DB Docker)
 - une checklist de deploiement production
@@ -22,6 +23,7 @@ docker-compose up -d --build
 ```
 
 Services exposes:
+
 - Frontend: `http://localhost:3000`
 - API: `http://localhost:3001`
 - PostgreSQL: `localhost:5433`
@@ -47,10 +49,12 @@ npm run dev:client
 ```
 
 Acces:
+
 - Frontend dev: `http://localhost:5173`
 - API dev: `http://localhost:3001`
 
 Important:
+
 - le backend charge maintenant automatiquement `../.env` quand lance depuis `server/`
 - si le mot de passe DB change apres initialisation du volume, il faut reinitialiser le volume
 
@@ -66,9 +70,11 @@ docker-compose up -d postgres
 ### Variables d'environnement
 
 Base de reference:
+
 - `.env.production.example`
 
 En production, definir au minimum:
+
 - `POSTGRES_PASSWORD` fort
 - `JWT_SECRET` fort (32+ chars)
 - `CORS_ORIGINS` vers le domaine frontend
@@ -112,12 +118,14 @@ docker-compose down
 
 ## 5) Depannage
 
-### `password authentication failed for user "openfamily"`
+### `password authentication failed for user "keurtonux"`
 
 Cause frequente:
+
 - volume PostgreSQL initialise avec un ancien mot de passe
 
 Solutions:
+
 1. remettre l'ancien mot de passe dans `.env`
 2. ou reinitialiser le volume (`docker-compose down -v`)
 
@@ -137,6 +145,7 @@ sudo lsof -i :5433
 ## 6) Couverture fonctionnelle
 
 Le projet couvre maintenant:
+
 - Auth
 - Dashboard
 - Courses + templates

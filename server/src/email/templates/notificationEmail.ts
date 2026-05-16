@@ -39,7 +39,7 @@ export const renderNotificationEmail = (
       <p style="margin:0 0 8px 0;font-size:14px;color:#52525b;">Bonjour ${escapeHtml(recipientName)},</p>
       <p style="margin:0 0 20px 0;font-size:16px;line-height:1.5;color:#18181b;">${escapeHtml(notification.message)}</p>
       <p style="margin:0;">
-        <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;">Voir dans OpenFamily</a>
+        <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;">Voir dans KeurTonux</a>
       </p>
     `;
 
@@ -51,9 +51,9 @@ export const renderNotificationEmail = (
         notification.title,
         notification.message,
         '',
-        `Voir dans OpenFamily : ${ctaUrl}`,
+        `Voir dans KeurTonux : ${ctaUrl}`,
         '',
-        '— OpenFamily',
+        '— KeurTonux',
         `Gérer mes préférences : ${settingsUrl}`,
     ].join('\n');
 

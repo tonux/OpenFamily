@@ -16,7 +16,7 @@ const AUTH_EXPIRED_EVENT = 'openfamily:auth-expired';
 //
 // On any 401, this client transparently attempts ONE token refresh through
 // `/api/auth/refresh`. If that succeeds, the original request is retried. If
-// it fails, an `openfamily:auth-expired` event is dispatched and the UI is
+// it fails, an `keurtonux:auth-expired` event is dispatched and the UI is
 // expected to redirect to the login screen.
 // =============================================================================
 

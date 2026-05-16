@@ -181,7 +181,7 @@ const Settings: React.FC = () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `openfamily-export-${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `keurtonux-export-${new Date().toISOString().split('T')[0]}.json`;
             a.click();
             URL.revokeObjectURL(url);
         } catch (error) {
@@ -499,7 +499,7 @@ const Settings: React.FC = () => {
                                 Importer des données
                             </h3>
                             <p className="mt-1 text-micro text-muted-foreground">
-                                Restaure des données depuis un fichier d'export OpenFamily. Les
+                                Restaure des données depuis un fichier d'export KeurTonux. Les
                                 données existantes ne sont pas écrasées (doublons ignorés).
                             </p>
 

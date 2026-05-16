@@ -1,7 +1,7 @@
 // =============================================================================
 // i18n bootstrap
 //
-// OpenFamily is built FR-first but distributed as open source — the strings
+// KeurTonux is built FR-first but distributed as open source — the strings
 // in components hardcoded in French need to migrate to translation keys so
 // non-FR forks become possible without a fork-and-replace exercise.
 //

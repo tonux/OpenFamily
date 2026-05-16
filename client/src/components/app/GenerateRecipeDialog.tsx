@@ -14,7 +14,7 @@ import { Card, CardContent, Button, Dialog, Input, Select } from '../ui';
 
 // Mirrors the server's RecipeGenerationInput.cuisine and the server's
 // GeneratedRecipe shape. Kept inline because the server's types are owned
-// elsewhere and the client doesn't depend on @openfamily/server.
+// elsewhere and the client doesn't depend on @keurtonux/server.
 type Cuisine = 'senegalese' | 'world' | 'any';
 
 interface GeneratedRecipe {

@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-OpenFamily is actively maintained on the `main` branch and latest release tags.
+KeurTonux is actively maintained on the `main` branch and latest release tags.
 
 - `main`: supported
 - Latest release (`v*`): supported

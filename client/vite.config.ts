@@ -15,8 +15,8 @@ export default defineConfig({
                 'OpenFamily.png',
             ],
             manifest: {
-                name: 'OpenFamily',
-                short_name: 'OpenFamily',
+                name: 'KeurTonux',
+                short_name: 'KeurTonux',
                 description: 'Application de gestion familiale',
                 theme_color: '#8E6FB6',
                 background_color: '#FBFAF6',

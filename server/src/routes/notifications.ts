@@ -123,7 +123,7 @@ router.post('/_test-email', async (req: AuthRequest, res) => {
             { email, name },
             {
                 type: 'task_due_today',
-                title: 'Email de test OpenFamily',
+                title: 'Email de test KeurTonux',
                 message:
                     'Si vous voyez ce message, la configuration SMTP fonctionne. ' +
                     'Vous pouvez fermer cette page.',

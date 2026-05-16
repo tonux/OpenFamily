@@ -1,6 +1,6 @@
-# OpenFamily
+# KeurTonux
 
-OpenFamily est une application de gestion familiale complète proposée en open source par NexaFlow, conçue pour être auto-hébergée. Gardez le contrôle total de vos données en hébergeant l'application sur votre propre serveur. Gérez vos courses, tâches, rendez-vous, recettes, planning des repas et budget familial en toute sécurité, accessible depuis tous vos appareils.
+KeurTonux est une application de gestion familiale complète proposée en open source par NexaFlow, conçue pour être auto-hébergée. Gardez le contrôle total de vos données en hébergeant l'application sur votre propre serveur. Gérez vos courses, tâches, rendez-vous, recettes, planning des repas et budget familial en toute sécurité, accessible depuis tous vos appareils.
 
 ## 🎯 Fonctionnalités
 
@@ -57,8 +57,8 @@ npm run install:all
 2. Configurez PostgreSQL et créez la base de données :
 
 ```bash
-psql -U postgres -c "CREATE DATABASE openfamily;"
-psql -U postgres -d openfamily -f server/schema.sql
+psql -U postgres -c "CREATE DATABASE keurtonux;"
+psql -U postgres -d keurtonux -f server/schema.sql
 ```
 
 3. Configurez les variables d'environnement :
@@ -116,6 +116,7 @@ npm run smoke:api
 ## 🛠️ Technologies
 
 ### Frontend
+
 - React 19 + TypeScript
 - Vite 7
 - TailwindCSS + Radix UI
@@ -123,6 +124,7 @@ npm run smoke:api
 - date-fns, Recharts
 
 ### Backend
+
 - Node.js 20 + Express
 - PostgreSQL 16
 - WebSocket (ws)
@@ -130,6 +132,7 @@ npm run smoke:api
 - TypeScript
 
 ### DevOps
+
 - Docker + Docker Compose
 - Multi-stage builds
 - Nginx (production)
@@ -166,6 +169,7 @@ Nexus/
 ## 📱 PWA
 
 L'application est une Progressive Web App installable sur mobile et desktop avec :
+
 - Mode offline
 - Service Worker
 - Manifest
@@ -184,6 +188,7 @@ docker-compose ps
 ```
 
 Puis dans le navigateur :
+
 - hard refresh (`Ctrl+Shift+R`)
 - ou supprimer les données du site / unregister du service worker
 
@@ -197,5 +202,5 @@ GNU Affero General Public License v3.0 (AGPL-3.0-only) - Voir le fichier licence
 
 ## 🙏 Crédits
 
-Basé sur le projet [OpenFamily](https://github.com/NexaFlowFrance/OpenFamily) inititié par NexaFlow France.
+Basé sur le projet [KeurTonux](https://github.com/NexaFlowFrance/KeurTonux) inititié par NexaFlow France.
 Ce projet respecte la philosophie open source et encourage le partage et la contribution communautaire.

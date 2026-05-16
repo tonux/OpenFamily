@@ -15,7 +15,7 @@
 // system prompt is explicit: never include or suggest a banned ingredient.
 // =============================================================================
 
-// Inlined locally because the server has no dep on @openfamily/shared.
+// Inlined locally because the server has no dep on @keurtonux/shared.
 // Keep this list in sync with shared/src/types.ts (DietaryRegime, SpiceLevel).
 export type DietaryRegime = 'omnivore' | 'vegetarian' | 'vegan' | 'halal' | 'kosher' | 'no_pork';
 export type SpiceLevel = 'none' | 'mild' | 'medium' | 'hot';

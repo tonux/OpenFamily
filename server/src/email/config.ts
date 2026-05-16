@@ -61,7 +61,7 @@ export const getEmailConfig = (): EmailConfig => {
         if (!from) {
             throw new Error(
                 'EMAIL_ENABLED=true but EMAIL_FROM is missing. ' +
-                    'Set EMAIL_FROM to a verified Resend sender (e.g. "OpenFamily <notifs@yourdomain.com>").',
+                    'Set EMAIL_FROM to a verified Resend sender (e.g. "KeurTonux <notifs@yourdomain.com>").',
             );
         }
         // Resend keys are prefixed with "re_". Wrong key = silent SMTP auth
