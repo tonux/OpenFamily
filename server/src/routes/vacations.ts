@@ -643,6 +643,174 @@ router.post('/:id/itinerary', async (req: AuthRequest, res) => {
     }
 });
 
+// --- Integrations: push trip data into Budget / Calendar / Tasks ---
+//
+// Single endpoint with a "targets" array so the UI can show three checkboxes
+// and submit them together. Each target is idempotent-ish (Budget skips if a
+// matching "Vacances - <title>" entry already exists; Calendar/Tasks just
+// create), but we don't go further to keep the flow simple — the user can
+// always delete duplicates from the source modules.
+
+router.post('/:id/integrations', async (req: AuthRequest, res) => {
+    try {
+        const { id } = req.params;
+        const targets = Array.isArray(req.body?.targets) ? req.body.targets : [];
+        const validTargets = new Set(['budget', 'calendar', 'tasks']);
+        const selected = targets.filter(
+            (t: unknown) => typeof t === 'string' && validTargets.has(t),
+        );
+
+        if (selected.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'targets must contain at least one of: budget, calendar, tasks',
+            });
+        }
+
+        const vacationRes = await query(
+            `SELECT id, title, destination, start_date, end_date, budget_planned
+             FROM vacations WHERE id = $1 AND user_id = $2`,
+            [id, req.userId],
+        );
+        if (vacationRes.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Vacation not found' });
+        }
+        const v = vacationRes.rows[0];
+
+        const participantsRes = await query(
+            `SELECT family_member_id FROM vacation_participants WHERE vacation_id = $1`,
+            [id],
+        );
+        const memberIds: string[] = participantsRes.rows.map((r: { family_member_id: string }) =>
+            String(r.family_member_id),
+        );
+
+        const startIso =
+            v.start_date instanceof Date
+                ? v.start_date.toISOString().slice(0, 10)
+                : String(v.start_date).slice(0, 10);
+        const endIso =
+            v.end_date instanceof Date
+                ? v.end_date.toISOString().slice(0, 10)
+                : String(v.end_date).slice(0, 10);
+        const summary: {
+            budget?: { created: boolean; reason?: string };
+            calendar?: { created: boolean; appointmentId?: string };
+            tasks?: { created: number };
+        } = {};
+
+        if (selected.includes('budget')) {
+            const budgetAmount = v.budget_planned === null ? null : Number(v.budget_planned);
+            if (budgetAmount === null || !Number.isFinite(budgetAmount) || budgetAmount <= 0) {
+                summary.budget = { created: false, reason: 'no_budget' };
+            } else {
+                const description = `Vacances - ${v.title}`;
+                const existing = await query(
+                    `SELECT id FROM budget_entries
+                     WHERE user_id = $1 AND category = 'Loisirs' AND description = $2
+                       AND date = $3 LIMIT 1`,
+                    [req.userId, description, startIso],
+                );
+                if (existing.rows.length > 0) {
+                    summary.budget = { created: false, reason: 'already_exists' };
+                } else {
+                    await query(
+                        `INSERT INTO budget_entries
+                            (user_id, category, amount, description, date, is_expense)
+                         VALUES ($1, 'Loisirs', $2, $3, $4, true)`,
+                        [req.userId, budgetAmount, description, startIso],
+                    );
+                    summary.budget = { created: true };
+                }
+            }
+        }
+
+        if (selected.includes('calendar')) {
+            // Bound to start_date at 09:00 → end_date at 18:00 — a reasonable
+            // all-day-ish block, matching how the Calendar UI displays events.
+            const startTs = `${startIso}T09:00:00`;
+            const endTs = `${endIso}T18:00:00`;
+            const inserted = await query(
+                `INSERT INTO appointments
+                    (user_id, title, description, start_time, end_time, location,
+                     family_member_ids, reminder_30min, reminder_1hour, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, false, false, $8)
+                 RETURNING id`,
+                [
+                    req.userId,
+                    `Vacances à ${v.destination}`,
+                    `Séjour: ${v.title}`,
+                    startTs,
+                    endTs,
+                    v.destination,
+                    JSON.stringify(memberIds),
+                    null,
+                ],
+            );
+            summary.calendar = { created: true, appointmentId: inserted.rows[0].id };
+        }
+
+        if (selected.includes('tasks')) {
+            // Three lead-time preparation tasks. Due dates are clamped to today
+            // if the trip is too close (start_date < today + offset).
+            const start = new Date(startIso);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const clamp = (offsetDays: number): string => {
+                const d = new Date(start);
+                d.setDate(d.getDate() - offsetDays);
+                if (d < today) return today.toISOString().slice(0, 10);
+                return d.toISOString().slice(0, 10);
+            };
+
+            const tasksToCreate = [
+                {
+                    title: `Vérifier papiers (${v.title})`,
+                    due: clamp(30),
+                    priority: 'Haute',
+                },
+                {
+                    title: `Réserver/confirmer hébergement (${v.title})`,
+                    due: clamp(21),
+                    priority: 'Haute',
+                },
+                {
+                    title: `Faire les valises (${v.title})`,
+                    due: clamp(3),
+                    priority: 'Moyenne',
+                },
+            ];
+
+            let created = 0;
+            for (const t of tasksToCreate) {
+                await query(
+                    `INSERT INTO tasks
+                        (user_id, title, description, due_date, frequency, priority, assigned_to)
+                     VALUES ($1, $2, $3, $4, NULL, $5, $6::jsonb)`,
+                    [
+                        req.userId,
+                        t.title,
+                        `Préparation des vacances à ${v.destination}.`,
+                        t.due,
+                        t.priority,
+                        JSON.stringify(memberIds),
+                    ],
+                );
+                created += 1;
+            }
+            summary.tasks = { created };
+        }
+
+        res.json({ success: true, data: summary });
+    } catch (error) {
+        logger.error('vacations.integrations_failed', {
+            error: error instanceof Error ? error.message : String(error),
+            id: req.params.id,
+        });
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
 router.delete('/:id/itinerary/:dayId', async (req: AuthRequest, res) => {
     try {
         const { id, dayId } = req.params;

@@ -63,6 +63,16 @@ import {
     buildBudgetAnalysisUserPrompt,
     budgetAnalysisSystemPrompt,
 } from './prompts/budgetAnalysisPrompts';
+import {
+    type VacationPlanInput,
+    buildVacationPlanUserPrompt,
+    vacationPlanSystemPrompt,
+} from './prompts/vacationPlanPrompts';
+import {
+    type VacationLuggageInput,
+    buildVacationLuggageUserPrompt,
+    vacationLuggageSystemPrompt,
+} from './prompts/vacationLuggagePrompts';
 import type { WeatherSummary } from '../weather/WeatherService';
 
 let cachedProvider: BaseProvider | null = null;
@@ -1176,6 +1186,344 @@ export type {
     BudgetMonthSnapshot,
     BudgetTrendPoint,
 } from './prompts/budgetAnalysisPrompts';
+
+// ---------------------------------------------------------------------------
+// Vacation plan generation — Vacations page "Generate AI plan"
+// ---------------------------------------------------------------------------
+
+const ITINERARY_MEAL_TYPES = new Set(['breakfast', 'lunch', 'dinner', 'snack']);
+
+export interface PlannedActivity {
+    title: string;
+    time: string | null;
+    duration_min: number | null;
+    cost: number | null;
+    location: string | null;
+    notes: string | null;
+}
+
+export interface PlannedMealSuggestion {
+    meal: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+    suggestion: string;
+    restaurant: string | null;
+    cost: number | null;
+}
+
+export interface PlannedDay {
+    dayNumber: number;
+    date: string;
+    theme: string;
+    activities: PlannedActivity[];
+    meals_suggestions: PlannedMealSuggestion[];
+    estimated_cost: number | null;
+    transport_notes: string | null;
+    notes: string | null;
+}
+
+export interface VacationPlan {
+    summary: string;
+    totalEstimatedCost: number | null;
+    tips: string[];
+    days: PlannedDay[];
+}
+
+export interface GenerateVacationPlanResult {
+    plan: VacationPlan;
+    model: string;
+}
+
+const TIME_RE = /^\d{2}:\d{2}$/;
+const ISO_DATE_RE_INTERNAL = /^\d{4}-\d{2}-\d{2}$/;
+
+const sanitizeActivity = (raw: unknown): PlannedActivity | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const title = typeof r.title === 'string' ? r.title.trim().slice(0, 120) : '';
+    if (!title) return null;
+    const time = typeof r.time === 'string' && TIME_RE.test(r.time.trim()) ? r.time.trim() : null;
+    const durationRaw =
+        typeof r.duration_min === 'number' ? r.duration_min : Number(r.duration_min);
+    const duration_min =
+        Number.isFinite(durationRaw) && durationRaw > 0 && durationRaw < 1440
+            ? Math.round(durationRaw)
+            : null;
+    const costRaw = typeof r.cost === 'number' ? r.cost : Number(r.cost);
+    const cost =
+        Number.isFinite(costRaw) && costRaw >= 0 && costRaw < 1_000_000
+            ? Math.round(costRaw * 100) / 100
+            : null;
+    const location =
+        typeof r.location === 'string' && r.location.trim()
+            ? r.location.trim().slice(0, 120)
+            : null;
+    const notes =
+        typeof r.notes === 'string' && r.notes.trim() ? r.notes.trim().slice(0, 220) : null;
+    return { title, time, duration_min, cost, location, notes };
+};
+
+const sanitizeMealSuggestion = (raw: unknown): PlannedMealSuggestion | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const meal =
+        typeof r.meal === 'string' && ITINERARY_MEAL_TYPES.has(r.meal)
+            ? (r.meal as PlannedMealSuggestion['meal'])
+            : null;
+    if (!meal) return null;
+    const suggestion = typeof r.suggestion === 'string' ? r.suggestion.trim().slice(0, 200) : '';
+    if (!suggestion) return null;
+    const restaurant =
+        typeof r.restaurant === 'string' && r.restaurant.trim()
+            ? r.restaurant.trim().slice(0, 120)
+            : null;
+    const costRaw = typeof r.cost === 'number' ? r.cost : Number(r.cost);
+    const cost =
+        Number.isFinite(costRaw) && costRaw >= 0 && costRaw < 1_000_000
+            ? Math.round(costRaw * 100) / 100
+            : null;
+    return { meal, suggestion, restaurant, cost };
+};
+
+const sanitizePlannedDay = (raw: unknown, fallbackDayNumber: number): PlannedDay | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const dayNumberRaw = typeof r.dayNumber === 'number' ? r.dayNumber : Number(r.dayNumber);
+    const dayNumber =
+        Number.isFinite(dayNumberRaw) && dayNumberRaw > 0
+            ? Math.round(dayNumberRaw)
+            : fallbackDayNumber;
+    const date =
+        typeof r.date === 'string' && ISO_DATE_RE_INTERNAL.test(r.date.trim()) ? r.date.trim() : '';
+    if (!date) return null;
+    const theme = typeof r.theme === 'string' ? r.theme.trim().slice(0, 80) : '';
+
+    const activities: PlannedActivity[] = [];
+    if (Array.isArray(r.activities)) {
+        for (const a of r.activities) {
+            const s = sanitizeActivity(a);
+            if (s) activities.push(s);
+            if (activities.length >= 8) break;
+        }
+    }
+    const meals: PlannedMealSuggestion[] = [];
+    if (Array.isArray(r.meals_suggestions)) {
+        for (const m of r.meals_suggestions) {
+            const s = sanitizeMealSuggestion(m);
+            if (s) meals.push(s);
+            if (meals.length >= 4) break;
+        }
+    }
+    const estimatedRaw =
+        typeof r.estimated_cost === 'number' ? r.estimated_cost : Number(r.estimated_cost);
+    const estimated_cost =
+        Number.isFinite(estimatedRaw) && estimatedRaw >= 0 && estimatedRaw < 1_000_000
+            ? Math.round(estimatedRaw * 100) / 100
+            : null;
+    const transport_notes =
+        typeof r.transport_notes === 'string' && r.transport_notes.trim()
+            ? r.transport_notes.trim().slice(0, 200)
+            : null;
+    const notes =
+        typeof r.notes === 'string' && r.notes.trim() ? r.notes.trim().slice(0, 200) : null;
+
+    return {
+        dayNumber,
+        date,
+        theme,
+        activities,
+        meals_suggestions: meals,
+        estimated_cost,
+        transport_notes,
+        notes,
+    };
+};
+
+const sanitizeVacationPlan = (raw: unknown, expectedDays: number): VacationPlan | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const summary = typeof r.summary === 'string' ? r.summary.trim().slice(0, 400) : '';
+    const totalRaw =
+        typeof r.totalEstimatedCost === 'number'
+            ? r.totalEstimatedCost
+            : Number(r.totalEstimatedCost);
+    const totalEstimatedCost =
+        Number.isFinite(totalRaw) && totalRaw >= 0 && totalRaw < 100_000_000
+            ? Math.round(totalRaw * 100) / 100
+            : null;
+    const tips = stringArray(r.tips, 6);
+
+    const rawDays = Array.isArray(r.days) ? r.days : [];
+    const days: PlannedDay[] = [];
+    for (let i = 0; i < rawDays.length && days.length < expectedDays; i += 1) {
+        const sanitized = sanitizePlannedDay(rawDays[i], i + 1);
+        if (sanitized) days.push(sanitized);
+    }
+    if (days.length === 0) return null;
+
+    return { summary, totalEstimatedCost, tips, days };
+};
+
+/**
+ * Generate a complete day-by-day itinerary for a vacation. Uses the heavy
+ * model — the model needs to reason about geography, ages, budget allocation
+ * and produce well-structured output across N days. Each day generates roughly
+ * 400 tokens of output, so we scale maxTokens proportionally.
+ *
+ * No cache: every trip is unique by definition.
+ */
+export const generateVacationPlan = async (
+    input: VacationPlanInput,
+    ctx: { userId: string },
+): Promise<GenerateVacationPlanResult> => {
+    if (input.days < 1 || input.days > 30) {
+        throw new AiError('BAD_REQUEST', 'days must be between 1 and 30');
+    }
+
+    const cfg = getAiConfig();
+    const model = cfg.models.heavy;
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: vacationPlanSystemPrompt },
+                { role: 'user', content: buildVacationPlanUserPrompt(input) },
+            ],
+            temperature: 0.6,
+            // ~450 tokens per day with margin for summary + tips.
+            maxTokens: 450 * input.days + 400,
+            jsonMode: true,
+            model,
+        },
+        { userId: ctx.userId, feature: 'vacations.plan_generate', model },
+    );
+
+    const parsed = safeParseJson(response.content);
+    const plan = sanitizeVacationPlan(parsed, input.days);
+    if (!plan) {
+        throw new AiError('BAD_JSON', 'Model did not return a usable vacation plan');
+    }
+    return { plan, model: response.model };
+};
+
+// ---------------------------------------------------------------------------
+// Vacation luggage generation
+// ---------------------------------------------------------------------------
+
+const LUGGAGE_CATEGORIES_VALID = new Set([
+    'clothing',
+    'toiletries',
+    'documents',
+    'health',
+    'electronics',
+    'kids',
+    'misc',
+]);
+
+export type LuggageCategory =
+    | 'clothing'
+    | 'toiletries'
+    | 'documents'
+    | 'health'
+    | 'electronics'
+    | 'kids'
+    | 'misc';
+
+export interface GeneratedLuggageItem {
+    owner: string; // "shared" or a participant id
+    category: LuggageCategory;
+    item: string;
+    quantity: number;
+    notes: string | null;
+}
+
+export interface GeneratedLuggage {
+    items: GeneratedLuggageItem[];
+    warnings: string[];
+}
+
+export interface GenerateLuggageResult {
+    luggage: GeneratedLuggage;
+    model: string;
+}
+
+const sanitizeLuggageItem = (
+    raw: unknown,
+    validOwnerIds: Set<string>,
+): GeneratedLuggageItem | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const ownerRaw = typeof r.owner === 'string' ? r.owner.trim() : '';
+    const owner = ownerRaw === 'shared' || validOwnerIds.has(ownerRaw) ? ownerRaw : 'shared';
+    const category =
+        typeof r.category === 'string' && LUGGAGE_CATEGORIES_VALID.has(r.category)
+            ? (r.category as LuggageCategory)
+            : 'misc';
+    const item = typeof r.item === 'string' ? r.item.trim().slice(0, 160) : '';
+    if (!item) return null;
+    const qtyRaw = typeof r.quantity === 'number' ? r.quantity : Number(r.quantity);
+    const quantity = Number.isFinite(qtyRaw) && qtyRaw > 0 && qtyRaw < 100 ? Math.round(qtyRaw) : 1;
+    const notes =
+        typeof r.notes === 'string' && r.notes.trim() ? r.notes.trim().slice(0, 200) : null;
+    return { owner, category, item, quantity, notes };
+};
+
+const sanitizeLuggage = (raw: unknown, validOwnerIds: Set<string>): GeneratedLuggage | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const rawItems = Array.isArray(r.items) ? r.items : [];
+    const items: GeneratedLuggageItem[] = [];
+    for (const it of rawItems) {
+        const sanitized = sanitizeLuggageItem(it, validOwnerIds);
+        if (sanitized) items.push(sanitized);
+        if (items.length >= 250) break; // hard cap to keep DB inserts sane
+    }
+    if (items.length === 0) return null;
+    const warnings = stringArray(r.warnings, 5);
+    return { items, warnings };
+};
+
+/**
+ * Generate a packing checklist for a vacation: per-participant items + a
+ * shared family list. Uses the default model — the task is structured but
+ * doesn't need heavy reasoning; cost-per-trip stays minimal.
+ */
+export const generateVacationLuggage = async (
+    input: VacationLuggageInput,
+    ctx: { userId: string },
+): Promise<GenerateLuggageResult> => {
+    if (input.days < 1 || input.days > 30) {
+        throw new AiError('BAD_REQUEST', 'days must be between 1 and 30');
+    }
+
+    const validOwnerIds = new Set(input.participants.map((p) => p.id));
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: vacationLuggageSystemPrompt },
+                { role: 'user', content: buildVacationLuggageUserPrompt(input) },
+            ],
+            temperature: 0.4,
+            // ~25 items per person + 12 shared, ~12 tokens each = generous margin.
+            maxTokens: Math.min(3000, 600 + input.participants.length * 350),
+            jsonMode: true,
+        },
+        { userId: ctx.userId, feature: 'vacations.luggage_generate' },
+    );
+
+    const parsed = safeParseJson(response.content);
+    const luggage = sanitizeLuggage(parsed, validOwnerIds);
+    if (!luggage) {
+        throw new AiError('BAD_JSON', 'Model did not return any luggage item');
+    }
+    return { luggage, model: response.model };
+};
+
+/** Re-export shared types so routes/tests can import them from AIService. */
+export type { VacationPlanInput, VacationPlanParticipant } from './prompts/vacationPlanPrompts';
+export type {
+    VacationLuggageInput,
+    VacationLuggageParticipant,
+} from './prompts/vacationLuggagePrompts';
 
 /** Exposed for tests that swap in a mock provider. */
 export const setAiProviderForTests = (provider: BaseProvider | null): void => {

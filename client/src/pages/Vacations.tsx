@@ -14,6 +14,16 @@ import {
     Check,
     UserCircle2,
     Users as UsersIcon,
+    Sparkles,
+    Wallet,
+    CheckSquare,
+    Loader2,
+    Wand2,
+    Clock,
+    Coffee,
+    UtensilsCrossed,
+    Car,
+    AlertCircle,
 } from 'lucide-react';
 import {
     Card,
@@ -61,6 +71,34 @@ interface LuggageItem {
     notes?: string;
 }
 
+interface ItineraryActivity {
+    title: string;
+    time?: string | null;
+    duration_min?: number | null;
+    cost?: number | null;
+    location?: string | null;
+    notes?: string | null;
+}
+
+interface ItineraryMealSuggestion {
+    meal: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+    suggestion: string;
+    restaurant?: string | null;
+    cost?: number | null;
+}
+
+interface ItineraryDay {
+    id: string;
+    day_number: number;
+    date: string;
+    theme?: string;
+    activities: ItineraryActivity[];
+    meals_suggestions: ItineraryMealSuggestion[];
+    estimated_cost?: number;
+    transport_notes?: string;
+    notes?: string;
+}
+
 interface Vacation {
     id: string;
     title: string;
@@ -82,6 +120,7 @@ interface Vacation {
     review_text?: string;
     participants?: FamilyMember[];
     luggage?: LuggageItem[];
+    itinerary?: ItineraryDay[];
 }
 
 const ACCOMMODATION_OPTIONS: Array<{ value: AccommodationType | ''; labelKey: string }> = [
@@ -648,6 +687,153 @@ const VacationDetail: React.FC<DetailProps> = ({ vacation, familyMembers, onBack
             : '',
     );
 
+    const [planAiOpen, setPlanAiOpen] = useState(false);
+    const [planExtra, setPlanExtra] = useState('');
+    const [planLoading, setPlanLoading] = useState(false);
+    const [planError, setPlanError] = useState<string | null>(null);
+
+    const [luggageAiOpen, setLuggageAiOpen] = useState(false);
+    const [luggageExtra, setLuggageExtra] = useState('');
+    const [luggageReplace, setLuggageReplace] = useState(false);
+    const [luggageLoading, setLuggageLoading] = useState(false);
+    const [luggageError, setLuggageError] = useState<string | null>(null);
+    const [luggageWarnings, setLuggageWarnings] = useState<string[]>([]);
+
+    const [integrationsOpen, setIntegrationsOpen] = useState(false);
+    const [integrationTargets, setIntegrationTargets] = useState<Set<string>>(
+        new Set(['budget', 'calendar', 'tasks']),
+    );
+    const [integrationsLoading, setIntegrationsLoading] = useState(false);
+    const [integrationsResult, setIntegrationsResult] = useState<string | null>(null);
+    const [integrationsError, setIntegrationsError] = useState<string | null>(null);
+
+    const generatePlan = async () => {
+        setPlanLoading(true);
+        setPlanError(null);
+        try {
+            const res = await api.post<{ success: boolean; data?: unknown; error?: unknown }>(
+                '/api/ai/vacations/plan',
+                {
+                    vacationId: vacation.id,
+                    extraNotes: planExtra.trim() || undefined,
+                    persist: true,
+                },
+            );
+            if (!res.success) {
+                setPlanError(typeof res.error === 'string' ? res.error : t('vacations.ai.error'));
+                return;
+            }
+            setPlanAiOpen(false);
+            setPlanExtra('');
+            await onReload();
+        } catch (err) {
+            setPlanError(err instanceof Error ? err.message : t('vacations.ai.error'));
+        } finally {
+            setPlanLoading(false);
+        }
+    };
+
+    const generateLuggage = async () => {
+        setLuggageLoading(true);
+        setLuggageError(null);
+        setLuggageWarnings([]);
+        try {
+            const res = await api.post<{
+                success: boolean;
+                data?: { inserted?: number; warnings?: string[] };
+                error?: unknown;
+            }>('/api/ai/vacations/luggage', {
+                vacationId: vacation.id,
+                extraNotes: luggageExtra.trim() || undefined,
+                replace: luggageReplace,
+            });
+            if (!res.success) {
+                setLuggageError(
+                    typeof res.error === 'string' ? res.error : t('vacations.ai.error'),
+                );
+                return;
+            }
+            setLuggageWarnings(res.data?.warnings ?? []);
+            setLuggageAiOpen(false);
+            setLuggageExtra('');
+            setLuggageReplace(false);
+            await onReload();
+        } catch (err) {
+            setLuggageError(err instanceof Error ? err.message : t('vacations.ai.error'));
+        } finally {
+            setLuggageLoading(false);
+        }
+    };
+
+    const toggleIntegration = (target: string) => {
+        setIntegrationTargets((prev) => {
+            const next = new Set(prev);
+            if (next.has(target)) next.delete(target);
+            else next.add(target);
+            return next;
+        });
+    };
+
+    const runIntegrations = async () => {
+        if (integrationTargets.size === 0) return;
+        setIntegrationsLoading(true);
+        setIntegrationsError(null);
+        setIntegrationsResult(null);
+        try {
+            const res = await api.post<{
+                success: boolean;
+                data?: {
+                    budget?: { created: boolean; reason?: string };
+                    calendar?: { created: boolean };
+                    tasks?: { created: number };
+                };
+                error?: unknown;
+            }>(`/api/vacations/${vacation.id}/integrations`, {
+                targets: Array.from(integrationTargets),
+            });
+            if (!res.success) {
+                setIntegrationsError(
+                    typeof res.error === 'string' ? res.error : t('vacations.integrations.error'),
+                );
+                return;
+            }
+            const parts: string[] = [];
+            if (res.data?.budget) {
+                parts.push(
+                    res.data.budget.created
+                        ? t('vacations.integrations.budget_ok')
+                        : res.data.budget.reason === 'no_budget'
+                          ? t('vacations.integrations.budget_no_budget')
+                          : t('vacations.integrations.budget_exists'),
+                );
+            }
+            if (res.data?.calendar) {
+                parts.push(t('vacations.integrations.calendar_ok'));
+            }
+            if (res.data?.tasks) {
+                parts.push(t('vacations.integrations.tasks_ok', { count: res.data.tasks.created }));
+            }
+            setIntegrationsResult(parts.join(' • '));
+            setIntegrationsOpen(false);
+        } catch (err) {
+            setIntegrationsError(
+                err instanceof Error ? err.message : t('vacations.integrations.error'),
+            );
+        } finally {
+            setIntegrationsLoading(false);
+        }
+    };
+
+    const deleteDay = async (dayId: string) => {
+        if (!window.confirm(t('vacations.itinerary.confirm_delete'))) return;
+        try {
+            await api.delete(`/api/vacations/${vacation.id}/itinerary/${dayId}`);
+            await onReload();
+        } catch {
+            // ignore
+        }
+    };
+
     const luggageByMember = useMemo(() => {
         const groups = new Map<string, { name: string; color: string; items: LuggageItem[] }>();
         groups.set('__shared__', {
@@ -735,6 +921,26 @@ const VacationDetail: React.FC<DetailProps> = ({ vacation, familyMembers, onBack
                 <Badge className={cn('text-caption', STATUS_COLORS[vacation.status])}>
                     {t(`vacations.status.${vacation.status}`)}
                 </Badge>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+                <Button variant="secondary" onClick={() => setPlanAiOpen(true)}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {t('vacations.ai.generate_plan')}
+                </Button>
+                <Button variant="secondary" onClick={() => setLuggageAiOpen(true)}>
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    {t('vacations.ai.generate_luggage')}
+                </Button>
+                <Button variant="ghost" onClick={() => setIntegrationsOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('vacations.integrations.button')}
+                </Button>
+                {integrationsResult && (
+                    <span className="ml-2 text-caption text-muted-foreground">
+                        {integrationsResult}
+                    </span>
+                )}
             </div>
 
             <Card>
@@ -828,6 +1034,45 @@ const VacationDetail: React.FC<DetailProps> = ({ vacation, familyMembers, onBack
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
+                        <CalendarIcon className="h-5 w-5" />
+                        {t('vacations.itinerary.title')}
+                        {(vacation.itinerary?.length ?? 0) > 0 && (
+                            <span className="text-caption text-muted-foreground">
+                                {vacation.itinerary?.length} {t('vacations.days')}
+                            </span>
+                        )}
+                    </CardTitle>
+                    <Button variant="secondary" onClick={() => setPlanAiOpen(true)}>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        {(vacation.itinerary?.length ?? 0) > 0
+                            ? t('vacations.itinerary.regenerate')
+                            : t('vacations.ai.generate_plan')}
+                    </Button>
+                </CardHeader>
+                <CardContent>
+                    {(vacation.itinerary?.length ?? 0) === 0 ? (
+                        <p className="text-caption text-muted-foreground italic">
+                            {t('vacations.itinerary.empty')}
+                        </p>
+                    ) : (
+                        <div className="space-y-4">
+                            {vacation.itinerary!.map((day) => (
+                                <ItineraryDayCard
+                                    key={day.id}
+                                    day={day}
+                                    onDelete={() => deleteDay(day.id)}
+                                    lang={i18n.language}
+                                    formatMoney={formatMoney}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
                         <Briefcase className="h-5 w-5" />
                         {t('vacations.luggage.title')}
                         {totalCount > 0 && (
@@ -836,8 +1081,24 @@ const VacationDetail: React.FC<DetailProps> = ({ vacation, familyMembers, onBack
                             </span>
                         )}
                     </CardTitle>
+                    <Button variant="secondary" onClick={() => setLuggageAiOpen(true)}>
+                        <Wand2 className="mr-2 h-4 w-4" />
+                        {t('vacations.ai.generate_luggage')}
+                    </Button>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                    {luggageWarnings.length > 0 && (
+                        <div className="rounded-input border border-yellow-300 bg-yellow-50 p-3 text-caption text-yellow-900 dark:border-yellow-900/60 dark:bg-yellow-900/20 dark:text-yellow-100">
+                            <div className="flex items-start gap-2">
+                                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                <ul className="list-disc space-y-1 pl-4">
+                                    {luggageWarnings.map((w, i) => (
+                                        <li key={i}>{w}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    )}
                     <div className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
                         <Input
                             placeholder={t('vacations.luggage.placeholder')}
@@ -1036,8 +1297,340 @@ const VacationDetail: React.FC<DetailProps> = ({ vacation, familyMembers, onBack
                     </div>
                 </div>
             </Dialog>
+
+            <Dialog
+                open={planAiOpen}
+                onOpenChange={(open) => {
+                    if (!planLoading) setPlanAiOpen(open);
+                }}
+                title={t('vacations.ai.plan_dialog_title')}
+                description={t('vacations.ai.plan_dialog_desc')}
+            >
+                <div className="space-y-3 p-5 md:p-6">
+                    {(vacation.itinerary?.length ?? 0) > 0 && (
+                        <div className="rounded-input bg-yellow-50 p-3 text-caption text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-100">
+                            {t('vacations.ai.plan_overwrite_warning')}
+                        </div>
+                    )}
+                    <Textarea
+                        placeholder={t('vacations.ai.plan_extra_placeholder')}
+                        value={planExtra}
+                        onChange={(e) => setPlanExtra(e.target.value)}
+                        rows={4}
+                    />
+                    {planError && (
+                        <p className="rounded-input bg-destructive/10 p-2 text-caption text-destructive">
+                            {planError}
+                        </p>
+                    )}
+                    <p className="text-micro text-muted-foreground">
+                        {t('vacations.ai.plan_disclaimer')}
+                    </p>
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                            variant="ghost"
+                            onClick={() => setPlanAiOpen(false)}
+                            disabled={planLoading}
+                        >
+                            {t('common.cancel')}
+                        </Button>
+                        <Button onClick={generatePlan} disabled={planLoading}>
+                            {planLoading ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Sparkles className="mr-2 h-4 w-4" />
+                            )}
+                            {t('vacations.ai.generate')}
+                        </Button>
+                    </div>
+                </div>
+            </Dialog>
+
+            <Dialog
+                open={luggageAiOpen}
+                onOpenChange={(open) => {
+                    if (!luggageLoading) setLuggageAiOpen(open);
+                }}
+                title={t('vacations.ai.luggage_dialog_title')}
+                description={t('vacations.ai.luggage_dialog_desc')}
+            >
+                <div className="space-y-3 p-5 md:p-6">
+                    <Textarea
+                        placeholder={t('vacations.ai.luggage_extra_placeholder')}
+                        value={luggageExtra}
+                        onChange={(e) => setLuggageExtra(e.target.value)}
+                        rows={3}
+                    />
+                    {totalCount > 0 && (
+                        <label className="flex items-start gap-2 text-caption">
+                            <input
+                                type="checkbox"
+                                checked={luggageReplace}
+                                onChange={(e) => setLuggageReplace(e.target.checked)}
+                                className="mt-0.5"
+                            />
+                            <span>{t('vacations.ai.luggage_replace')}</span>
+                        </label>
+                    )}
+                    {luggageError && (
+                        <p className="rounded-input bg-destructive/10 p-2 text-caption text-destructive">
+                            {luggageError}
+                        </p>
+                    )}
+                    <p className="text-micro text-muted-foreground">
+                        {t('vacations.ai.luggage_disclaimer')}
+                    </p>
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                            variant="ghost"
+                            onClick={() => setLuggageAiOpen(false)}
+                            disabled={luggageLoading}
+                        >
+                            {t('common.cancel')}
+                        </Button>
+                        <Button onClick={generateLuggage} disabled={luggageLoading}>
+                            {luggageLoading ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Wand2 className="mr-2 h-4 w-4" />
+                            )}
+                            {t('vacations.ai.generate')}
+                        </Button>
+                    </div>
+                </div>
+            </Dialog>
+
+            <Dialog
+                open={integrationsOpen}
+                onOpenChange={(open) => {
+                    if (!integrationsLoading) setIntegrationsOpen(open);
+                }}
+                title={t('vacations.integrations.dialog_title')}
+                description={t('vacations.integrations.dialog_desc')}
+            >
+                <div className="space-y-3 p-5 md:p-6">
+                    <IntegrationToggle
+                        label={t('vacations.integrations.budget_label')}
+                        description={t('vacations.integrations.budget_desc')}
+                        icon={<Wallet className="h-5 w-5" />}
+                        checked={integrationTargets.has('budget')}
+                        onToggle={() => toggleIntegration('budget')}
+                    />
+                    <IntegrationToggle
+                        label={t('vacations.integrations.calendar_label')}
+                        description={t('vacations.integrations.calendar_desc')}
+                        icon={<CalendarIcon className="h-5 w-5" />}
+                        checked={integrationTargets.has('calendar')}
+                        onToggle={() => toggleIntegration('calendar')}
+                    />
+                    <IntegrationToggle
+                        label={t('vacations.integrations.tasks_label')}
+                        description={t('vacations.integrations.tasks_desc')}
+                        icon={<CheckSquare className="h-5 w-5" />}
+                        checked={integrationTargets.has('tasks')}
+                        onToggle={() => toggleIntegration('tasks')}
+                    />
+                    {integrationsError && (
+                        <p className="rounded-input bg-destructive/10 p-2 text-caption text-destructive">
+                            {integrationsError}
+                        </p>
+                    )}
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                            variant="ghost"
+                            onClick={() => setIntegrationsOpen(false)}
+                            disabled={integrationsLoading}
+                        >
+                            {t('common.cancel')}
+                        </Button>
+                        <Button
+                            onClick={runIntegrations}
+                            disabled={integrationsLoading || integrationTargets.size === 0}
+                        >
+                            {integrationsLoading && (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            )}
+                            {t('vacations.integrations.run')}
+                        </Button>
+                    </div>
+                </div>
+            </Dialog>
         </div>
     );
 };
+
+// ---------- Itinerary day card (read-only display) ----------
+
+interface ItineraryDayCardProps {
+    day: ItineraryDay;
+    onDelete: () => void;
+    lang: string;
+    formatMoney: (n: number) => string;
+}
+
+const MEAL_LABEL_KEYS: Record<ItineraryMealSuggestion['meal'], string> = {
+    breakfast: 'vacations.itinerary.meal.breakfast',
+    lunch: 'vacations.itinerary.meal.lunch',
+    dinner: 'vacations.itinerary.meal.dinner',
+    snack: 'vacations.itinerary.meal.snack',
+};
+
+const ItineraryDayCard: React.FC<ItineraryDayCardProps> = ({
+    day,
+    onDelete,
+    lang,
+    formatMoney,
+}) => {
+    const { t } = useTranslation();
+    const dateLabel = new Date(day.date).toLocaleDateString(lang, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+    });
+
+    return (
+        <div className="rounded-card border border-border bg-surface-2/40 p-4">
+            <div className="flex items-start justify-between gap-2">
+                <div>
+                    <p className="text-micro uppercase tracking-[0.12em] text-muted-foreground">
+                        {t('vacations.itinerary.day')} {day.day_number} — {dateLabel}
+                    </p>
+                    {day.theme && (
+                        <h4 className="mt-1 text-body font-semibold text-foreground">
+                            {day.theme}
+                        </h4>
+                    )}
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                    {day.estimated_cost !== undefined && day.estimated_cost !== null && (
+                        <Badge className="bg-primary-soft text-primary">
+                            {formatMoney(day.estimated_cost)}
+                        </Badge>
+                    )}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onDelete}
+                        aria-label={t('common.delete')}
+                        className="text-destructive hover:bg-destructive/10"
+                    >
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                </div>
+            </div>
+
+            {day.activities.length > 0 && (
+                <ul className="mt-3 space-y-2">
+                    {day.activities.map((a, i) => (
+                        <li key={i} className="flex items-start gap-2 text-caption">
+                            <Coffee className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                            <div className="flex-1">
+                                <p className="font-medium text-foreground">
+                                    {a.time && (
+                                        <span className="mr-2 inline-flex items-center gap-1 text-muted-foreground">
+                                            <Clock className="h-3 w-3" />
+                                            {a.time}
+                                        </span>
+                                    )}
+                                    {a.title}
+                                </p>
+                                {a.location && (
+                                    <p className="text-micro text-muted-foreground">{a.location}</p>
+                                )}
+                                {a.notes && (
+                                    <p className="text-micro italic text-muted-foreground">
+                                        {a.notes}
+                                    </p>
+                                )}
+                            </div>
+                            {a.cost !== undefined && a.cost !== null && a.cost > 0 && (
+                                <span className="text-micro text-muted-foreground">
+                                    {formatMoney(a.cost)}
+                                </span>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {day.meals_suggestions.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                    {day.meals_suggestions.map((m, i) => (
+                        <div
+                            key={i}
+                            className="flex items-start gap-1.5 rounded-pill bg-card px-3 py-1 text-micro"
+                        >
+                            <UtensilsCrossed className="mt-0.5 h-3 w-3 text-muted-foreground" />
+                            <span>
+                                <span className="font-semibold">{t(MEAL_LABEL_KEYS[m.meal])}:</span>{' '}
+                                {m.suggestion}
+                                {m.restaurant ? ` — ${m.restaurant}` : ''}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {day.transport_notes && (
+                <p className="mt-3 flex items-center gap-1 text-micro text-muted-foreground">
+                    <Car className="h-3 w-3" />
+                    {day.transport_notes}
+                </p>
+            )}
+            {day.notes && (
+                <p className="mt-2 border-l-2 border-border pl-3 text-micro italic text-muted-foreground">
+                    {day.notes}
+                </p>
+            )}
+        </div>
+    );
+};
+
+// ---------- Integration toggle row ----------
+
+interface IntegrationToggleProps {
+    label: string;
+    description: string;
+    icon: React.ReactNode;
+    checked: boolean;
+    onToggle: () => void;
+}
+
+const IntegrationToggle: React.FC<IntegrationToggleProps> = ({
+    label,
+    description,
+    icon,
+    checked,
+    onToggle,
+}) => (
+    <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+            'flex w-full items-start gap-3 rounded-card border p-3 text-left transition-colors',
+            checked
+                ? 'border-primary bg-primary-soft/50'
+                : 'border-border bg-card hover:bg-surface-2',
+        )}
+    >
+        <span className={cn('mt-0.5', checked ? 'text-primary' : 'text-muted-foreground')}>
+            {icon}
+        </span>
+        <span className="flex-1">
+            <p className="text-caption font-semibold text-foreground">{label}</p>
+            <p className="text-micro text-muted-foreground">{description}</p>
+        </span>
+        <span
+            className={cn(
+                'mt-0.5 flex h-5 w-5 items-center justify-center rounded border',
+                checked
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-card',
+            )}
+        >
+            {checked && <Check className="h-3 w-3" />}
+        </span>
+    </button>
+);
 
 export default Vacations;

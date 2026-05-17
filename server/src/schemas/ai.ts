@@ -126,3 +126,29 @@ export const analyzeBudgetMonthBodySchema = z
     .strict();
 
 export type AnalyzeBudgetMonthBody = z.infer<typeof analyzeBudgetMonthBodySchema>;
+
+// Vacation AI endpoints. The route resolves the vacation + participants
+// server-side from vacationId, so the client cannot inflate the input or
+// reach into someone else's trip.
+export const generateVacationPlanBodySchema = z
+    .object({
+        vacationId: z.string().uuid(),
+        /** Optional extra context the user types in the dialog. */
+        extraNotes: z.string().trim().max(500).optional(),
+        /** When true, persist generated days to vacation_itinerary (upsert). */
+        persist: z.boolean().optional().default(true),
+    })
+    .strict();
+
+export type GenerateVacationPlanBody = z.infer<typeof generateVacationPlanBodySchema>;
+
+export const generateVacationLuggageBodySchema = z
+    .object({
+        vacationId: z.string().uuid(),
+        extraNotes: z.string().trim().max(500).optional(),
+        /** Replace existing luggage list (DELETE before INSERT). */
+        replace: z.boolean().optional().default(false),
+    })
+    .strict();
+
+export type GenerateVacationLuggageBody = z.infer<typeof generateVacationLuggageBodySchema>;
