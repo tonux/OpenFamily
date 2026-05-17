@@ -16,6 +16,7 @@ import logger from '../lib/logger';
 import { getAiConfig } from './config';
 import { AiError } from './errors';
 import { NvidiaProvider } from './providers/NvidiaProvider';
+import { GeminiProvider } from './providers/GeminiProvider';
 import type {
     BaseProvider,
     ChatRequest,
@@ -91,9 +92,17 @@ const getProvider = (): BaseProvider => {
                 healthModel: cfg.models.default,
             });
             return cachedProvider;
+        case 'gemini':
+            cachedProvider = new GeminiProvider({
+                apiKey: cfg.gemini.apiKey,
+                baseUrl: cfg.gemini.baseUrl,
+                requestTimeoutMs: cfg.requestTimeoutMs,
+                healthModel: cfg.models.default,
+            });
+            return cachedProvider;
         default:
-            // The exhaustiveness is enforced by `provider: 'nvidia'` in AiConfig.
-            // This branch exists for future-proofing.
+            // Exhaustiveness guard: if AiProviderName grows, the switch above
+            // must too. This branch only runs on invalid runtime config.
             throw new AiError('PROVIDER_ERROR', `Unsupported AI provider: ${String(cfg.provider)}`);
     }
 };

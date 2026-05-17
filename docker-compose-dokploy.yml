@@ -12,7 +12,10 @@
 #   APP_DOMAIN=family.tonuxcorp.dev
 #   POSTGRES_PASSWORD, JWT_SECRET, MINIO_ROOT_PASSWORD     (generated secrets)
 #   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
-#   NVIDIA_API_KEY                                          (or AI_ENABLED=false)
+#   AI_PROVIDER=nvidia|gemini                               (default: nvidia)
+#   NVIDIA_API_KEY  (if AI_PROVIDER=nvidia)
+#   GEMINI_API_KEY  (if AI_PROVIDER=gemini)
+#   ...or AI_ENABLED=false to disable AI entirely
 #   RESEND_SMTP_PASSWORD, EMAIL_FROM                        (or EMAIL_ENABLED=false)
 
 services:
@@ -82,13 +85,22 @@ services:
       AUTH_RATE_LIMIT_WINDOW_MS: ${AUTH_RATE_LIMIT_WINDOW_MS:-900000}
       AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-10}
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
-      # AI (NVIDIA NIM)
+      # AI provider selection: nvidia (default) or gemini.
+      # When switching, supply the matching API key and (optionally) override
+      # AI_MODEL_* to the new provider's model names — sensible defaults are
+      # baked in per provider in server/src/ai/config.ts.
       AI_ENABLED: ${AI_ENABLED:-true}
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
+      AI_PROVIDER: ${AI_PROVIDER:-nvidia}
+      # NVIDIA NIM
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
       NVIDIA_API_BASE_URL: ${NVIDIA_API_BASE_URL:-https://integrate.api.nvidia.com/v1}
-      AI_MODEL_DEFAULT: ${AI_MODEL_DEFAULT:-meta/llama-3.1-8b-instruct}
-      AI_MODEL_HEAVY: ${AI_MODEL_HEAVY:-meta/llama-3.3-70b-instruct}
-      AI_MODEL_VISION: ${AI_MODEL_VISION:-meta/llama-3.2-90b-vision-instruct}
+      # Google Gemini (OpenAI-compatible endpoint)
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_API_BASE_URL: ${GEMINI_API_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      # Model overrides — leave empty to use per-provider defaults.
+      AI_MODEL_DEFAULT: ${AI_MODEL_DEFAULT:-}
+      AI_MODEL_HEAVY: ${AI_MODEL_HEAVY:-}
+      AI_MODEL_VISION: ${AI_MODEL_VISION:-}
       AI_MONTHLY_TOKEN_LIMIT_PER_USER: ${AI_MONTHLY_TOKEN_LIMIT_PER_USER:-2000000}
       AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-30000}
       AI_STREAMING_ENABLED: ${AI_STREAMING_ENABLED:-true}
