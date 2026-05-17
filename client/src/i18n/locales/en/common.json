@@ -13,6 +13,7 @@
     "budget": "Budget",
     "family": "Family",
     "house": "Home",
+    "vacations": "Vacations",
     "settings": "Settings",
     "mobile": {
       "home": "Home",
@@ -33,7 +34,81 @@
     "add_meal": "Add a meal",
     "add_expense": "Add an expense",
     "add_member": "Add a family member",
-    "add_equipment": "Add an equipment"
+    "add_equipment": "Add an equipment",
+    "add_vacation": "Plan a vacation"
+  },
+  "vacations": {
+    "title": "Vacations",
+    "subtitle": "Plan your trips and keep a history of your family stays.",
+    "add": "New vacation",
+    "add_title": "Plan a vacation",
+    "edit_title": "Edit vacation",
+    "empty": "No vacations yet.",
+    "days": "days",
+    "budget": "Planned budget",
+    "actual": "actual",
+    "confirm_delete": "Delete this vacation? This cannot be undone.",
+    "open_listing": "Open listing",
+    "tabs": {
+      "upcoming": "Upcoming",
+      "ongoing": "Ongoing",
+      "past": "History"
+    },
+    "status": {
+      "planning": "Planning",
+      "upcoming": "Upcoming",
+      "ongoing": "Ongoing",
+      "past": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "accommodation": {
+      "label": "Accommodation",
+      "unspecified": "Accommodation type",
+      "airbnb": "Airbnb",
+      "chalet": "Chalet",
+      "hotel": "Hotel",
+      "camping": "Camping",
+      "family": "Family / friends",
+      "other": "Other"
+    },
+    "form": {
+      "title": "Trip title (e.g. Summer 2026)",
+      "destination": "Destination (city)",
+      "country": "Country",
+      "accommodation_name": "Accommodation name",
+      "accommodation_url": "Booking URL (Airbnb, Booking…)",
+      "accommodation_address": "Address",
+      "accommodation_contact": "Host / owner contact",
+      "budget_planned": "Planned budget",
+      "objectives_placeholder": "Objectives (comma-separated: relax, culture, sport…)",
+      "notes": "Notes",
+      "participants": "Who's coming?",
+      "no_family_members": "No family members yet — add some on the Family page."
+    },
+    "luggage": {
+      "title": "Luggage & packing",
+      "shared": "Shared list",
+      "placeholder": "New item (e.g. passport)…",
+      "empty": "No items yet.",
+      "cat": {
+        "clothing": "Clothing",
+        "toiletries": "Toiletries",
+        "documents": "Documents",
+        "health": "Health",
+        "electronics": "Electronics",
+        "kids": "Kids",
+        "misc": "Misc"
+      }
+    },
+    "review": {
+      "title": "Review & summary",
+      "add": "Add review",
+      "empty": "No review yet. Rate your trip when you're back!",
+      "dialog_title": "Trip review",
+      "rating": "Overall rating",
+      "actual_cost": "Actual total cost",
+      "text_placeholder": "What we loved, would do again, would avoid…"
+    }
   },
   "header": {
     "toggle_dark": "Switch to dark theme",

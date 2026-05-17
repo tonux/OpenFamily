@@ -13,6 +13,7 @@
     "budget": "Budget",
     "family": "Famille",
     "house": "Maison",
+    "vacations": "Vacances",
     "settings": "Paramètres",
     "mobile": {
       "home": "Accueil",
@@ -33,7 +34,81 @@
     "add_meal": "Ajouter un repas",
     "add_expense": "Ajouter une dépense",
     "add_member": "Ajouter un membre",
-    "add_equipment": "Ajouter un équipement"
+    "add_equipment": "Ajouter un équipement",
+    "add_vacation": "Planifier des vacances"
+  },
+  "vacations": {
+    "title": "Vacances",
+    "subtitle": "Planifie tes séjours et garde l'historique de tes vacances en famille.",
+    "add": "Nouvelle vacance",
+    "add_title": "Planifier des vacances",
+    "edit_title": "Modifier la vacance",
+    "empty": "Aucune vacance pour le moment.",
+    "days": "jours",
+    "budget": "Budget prévu",
+    "actual": "réel",
+    "confirm_delete": "Supprimer cette vacance ? Cette action est définitive.",
+    "open_listing": "Ouvrir l'annonce",
+    "tabs": {
+      "upcoming": "À venir",
+      "ongoing": "En cours",
+      "past": "Historique"
+    },
+    "status": {
+      "planning": "En planification",
+      "upcoming": "À venir",
+      "ongoing": "En cours",
+      "past": "Terminé",
+      "cancelled": "Annulé"
+    },
+    "accommodation": {
+      "label": "Hébergement",
+      "unspecified": "Type d'hébergement",
+      "airbnb": "Airbnb",
+      "chalet": "Chalet",
+      "hotel": "Hôtel",
+      "camping": "Camping",
+      "family": "Famille / amis",
+      "other": "Autre"
+    },
+    "form": {
+      "title": "Titre du séjour (ex: Vacances d'été 2026)",
+      "destination": "Destination (ville)",
+      "country": "Pays",
+      "accommodation_name": "Nom de l'hébergement",
+      "accommodation_url": "Lien de la réservation (Airbnb, Booking…)",
+      "accommodation_address": "Adresse",
+      "accommodation_contact": "Contact propriétaire / hôte",
+      "budget_planned": "Budget prévisionnel",
+      "objectives_placeholder": "Objectifs (séparés par des virgules: détente, culture, sport…)",
+      "notes": "Notes",
+      "participants": "Qui part ?",
+      "no_family_members": "Aucun membre de famille — ajoute-en dans la page Famille."
+    },
+    "luggage": {
+      "title": "Valises & bagages",
+      "shared": "Liste commune",
+      "placeholder": "Nouvel objet (ex: passeport)…",
+      "empty": "Aucun objet pour l'instant.",
+      "cat": {
+        "clothing": "Vêtements",
+        "toiletries": "Toilette",
+        "documents": "Papiers",
+        "health": "Santé",
+        "electronics": "Électronique",
+        "kids": "Enfants",
+        "misc": "Divers"
+      }
+    },
+    "review": {
+      "title": "Avis & bilan",
+      "add": "Ajouter un avis",
+      "empty": "Pas encore d'avis. Note ton séjour au retour !",
+      "dialog_title": "Bilan du séjour",
+      "rating": "Note globale",
+      "actual_cost": "Coût réel total",
+      "text_placeholder": "Ce qu'on a aimé, à refaire, à éviter…"
+    }
   },
   "header": {
     "toggle_dark": "Activer le thème sombre",

@@ -15,6 +15,7 @@ import {
     Wallet,
     Users,
     Wrench,
+    Plane,
     Settings,
     Moon,
     Sun,
@@ -47,6 +48,7 @@ const navigation = [
     { labelKey: 'nav.budget', href: '/budget', icon: Wallet },
     { labelKey: 'nav.family', href: '/family', icon: Users },
     { labelKey: 'nav.house', href: '/house', icon: Wrench },
+    { labelKey: 'nav.vacations', href: '/vacations', icon: Plane },
     { labelKey: 'nav.settings', href: '/settings', icon: Settings },
 ] as const;
 
@@ -68,6 +70,7 @@ const quickActions = [
     { labelKey: 'quick_actions.add_expense', href: '/budget', icon: Wallet },
     { labelKey: 'quick_actions.add_member', href: '/family', icon: Users },
     { labelKey: 'quick_actions.add_equipment', href: '/house', icon: Wrench },
+    { labelKey: 'quick_actions.add_vacation', href: '/vacations', icon: Plane },
 ] as const;
 
 const isRouteActive = (pathname: string, href: string) => {

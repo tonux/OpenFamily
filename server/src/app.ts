@@ -20,6 +20,7 @@ import weatherRoutes from './routes/weather';
 import houseRoutes from './routes/house';
 import notificationsRoutes from './routes/notifications';
 import documentsRoutes from './routes/documents';
+import vacationsRoutes from './routes/vacations';
 import { loadEnv } from './config/loadEnv';
 import logger from './lib/logger';
 
@@ -150,6 +151,7 @@ app.use('/api/weather', weatherRoutes);
 app.use('/api/house', houseRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/documents', documentsRoutes);
+app.use('/api/vacations', vacationsRoutes);
 
 // 404 handler
 app.use((req, res) => {
