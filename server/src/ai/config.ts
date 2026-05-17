@@ -7,13 +7,25 @@
 //
 // `AI_ENABLED=false` disables the feature entirely without removing any code,
 // useful for the open-source self-hoster who has no provider key.
+//
+// Provider selection (AI_PROVIDER):
+//   - nvidia (default — backwards compatible): uses NVIDIA NIM
+//   - gemini: uses Google Gemini through its OpenAI-compatible endpoint
+// Both speak the OpenAI chat-completions dialect, so the provider code is a
+// thin HTTP client per provider with the right baseUrl and key.
 // =============================================================================
 import logger from '../lib/logger';
 
+export type AiProviderName = 'nvidia' | 'gemini';
+
 export interface AiConfig {
     enabled: boolean;
-    provider: 'nvidia';
+    provider: AiProviderName;
     nvidia: {
+        apiKey: string;
+        baseUrl: string;
+    };
+    gemini: {
         apiKey: string;
         baseUrl: string;
     };
@@ -40,50 +52,102 @@ const parseIntEnv = (raw: string | undefined, fallback: number): number => {
     return Number.isFinite(n) && n >= 0 ? n : fallback;
 };
 
+const parseProviderEnv = (raw: string | undefined): AiProviderName => {
+    const v = (raw ?? '').toLowerCase().trim();
+    if (v === 'gemini') return 'gemini';
+    return 'nvidia'; // default; covers '', 'nvidia', and any unknown value
+};
+
+// Per-provider model defaults. Picked so that a fresh deploy "just works"
+// without forcing the operator to know the model catalogue of every provider.
+// Override individually with AI_MODEL_DEFAULT / _HEAVY / _VISION env vars.
+const DEFAULT_MODELS: Record<AiProviderName, { default: string; heavy: string; vision: string }> = {
+    nvidia: {
+        default: 'meta/llama-3.1-8b-instruct',
+        heavy: 'meta/llama-3.3-70b-instruct',
+        vision: 'meta/llama-3.2-90b-vision-instruct',
+    },
+    gemini: {
+        // Flash for default cheap calls, Pro for heavy reasoning, Flash again
+        // for vision (it's natively multimodal — Pro would also work).
+        default: 'gemini-2.5-flash',
+        heavy: 'gemini-2.5-pro',
+        vision: 'gemini-2.5-flash',
+    },
+};
+
 let cached: AiConfig | null = null;
 
 /**
  * Read the AI configuration from process.env. Cached after the first call so
  * env mutations during a single process lifetime don't surprise callers.
  *
- * Throws if AI_ENABLED is true but the API key is missing or has an obviously
- * wrong shape — we want this to crash at boot, not when a user finally tries
- * to use the chat feature.
+ * Throws if AI_ENABLED is true but the API key for the selected provider is
+ * missing — we want this to crash at boot, not when a user finally tries to
+ * use the chat feature.
  */
 export const getAiConfig = (): AiConfig => {
     if (cached) return cached;
 
     const enabled = parseBoolEnv(process.env.AI_ENABLED, true);
-    const apiKey = process.env.NVIDIA_API_KEY?.trim() ?? '';
+    const provider = parseProviderEnv(process.env.AI_PROVIDER);
+
+    const nvidiaKey = process.env.NVIDIA_API_KEY?.trim() ?? '';
+    const geminiKey = process.env.GEMINI_API_KEY?.trim() ?? '';
 
     if (enabled) {
-        if (!apiKey) {
-            throw new Error(
-                'AI_ENABLED=true but NVIDIA_API_KEY is missing. ' +
-                    'Either set the key or set AI_ENABLED=false to disable the feature.',
-            );
-        }
-        // NVIDIA NIM keys start with "nvapi-" — catch obvious copy-paste mistakes
-        // (e.g. someone pasting an OpenAI key by accident).
-        if (!apiKey.startsWith('nvapi-')) {
-            logger.warn('ai.api_key_unexpected_prefix', {
-                hint: 'NVIDIA NIM keys usually start with "nvapi-". Double-check the value.',
-            });
+        if (provider === 'nvidia') {
+            if (!nvidiaKey) {
+                throw new Error(
+                    'AI_ENABLED=true and AI_PROVIDER=nvidia but NVIDIA_API_KEY is missing. ' +
+                        'Either set the key, switch AI_PROVIDER, or set AI_ENABLED=false.',
+                );
+            }
+            // NVIDIA NIM keys start with "nvapi-" — catch obvious copy-paste mistakes
+            // (e.g. someone pasting an OpenAI key by accident).
+            if (!nvidiaKey.startsWith('nvapi-')) {
+                logger.warn('ai.api_key_unexpected_prefix', {
+                    provider: 'nvidia',
+                    hint: 'NVIDIA NIM keys usually start with "nvapi-". Double-check the value.',
+                });
+            }
+        } else if (provider === 'gemini') {
+            if (!geminiKey) {
+                throw new Error(
+                    'AI_ENABLED=true and AI_PROVIDER=gemini but GEMINI_API_KEY is missing. ' +
+                        'Either set the key, switch AI_PROVIDER, or set AI_ENABLED=false.',
+                );
+            }
+            // Google AI Studio keys start with "AIza" — catch obvious mistakes.
+            if (!geminiKey.startsWith('AIza')) {
+                logger.warn('ai.api_key_unexpected_prefix', {
+                    provider: 'gemini',
+                    hint: 'Gemini API keys usually start with "AIza". Double-check the value.',
+                });
+            }
         }
     }
 
+    const providerDefaults = DEFAULT_MODELS[provider];
+
     cached = {
         enabled,
-        provider: 'nvidia',
+        provider,
         nvidia: {
-            apiKey,
+            apiKey: nvidiaKey,
             baseUrl:
                 process.env.NVIDIA_API_BASE_URL?.trim() || 'https://integrate.api.nvidia.com/v1',
         },
+        gemini: {
+            apiKey: geminiKey,
+            baseUrl:
+                process.env.GEMINI_API_BASE_URL?.trim() ||
+                'https://generativelanguage.googleapis.com/v1beta/openai',
+        },
         models: {
-            default: process.env.AI_MODEL_DEFAULT?.trim() || 'meta/llama-3.1-8b-instruct',
-            heavy: process.env.AI_MODEL_HEAVY?.trim() || 'meta/llama-3.3-70b-instruct',
-            vision: process.env.AI_MODEL_VISION?.trim() || 'meta/llama-3.2-90b-vision-instruct',
+            default: process.env.AI_MODEL_DEFAULT?.trim() || providerDefaults.default,
+            heavy: process.env.AI_MODEL_HEAVY?.trim() || providerDefaults.heavy,
+            vision: process.env.AI_MODEL_VISION?.trim() || providerDefaults.vision,
         },
         requestTimeoutMs: parseIntEnv(process.env.AI_REQUEST_TIMEOUT_MS, 30_000),
         streamingEnabled: parseBoolEnv(process.env.AI_STREAMING_ENABLED, true),
@@ -96,7 +160,7 @@ export const getAiConfig = (): AiConfig => {
     logger.info('ai.config_loaded', {
         enabled: cached.enabled,
         provider: cached.provider,
-        baseUrl: cached.nvidia.baseUrl,
+        baseUrl: cached.provider === 'nvidia' ? cached.nvidia.baseUrl : cached.gemini.baseUrl,
         modelDefault: cached.models.default,
         modelHeavy: cached.models.heavy,
         // Never log the key, even partially.
