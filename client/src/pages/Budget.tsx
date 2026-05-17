@@ -12,8 +12,10 @@ import {
     ChevronLeft,
     ChevronRight,
     ScanLine,
+    Sparkles,
 } from 'lucide-react';
 import { ReceiptScanDialog, type ExtractedReceipt } from '../components/app/ReceiptScanDialog';
+import { BudgetAnalysisDialog } from '../components/app/BudgetAnalysisDialog';
 import {
     Card,
     CardContent,
@@ -138,6 +140,7 @@ const Budget: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [scanDialogOpen, setScanDialogOpen] = useState(false);
+    const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
     const [limitDialogOpen, setLimitDialogOpen] = useState(false);
     const [editingEntry, setEditingEntry] = useState<BudgetEntry | null>(null);
     const [formError, setFormError] = useState('');
@@ -583,6 +586,26 @@ const Budget: React.FC = () => {
             label: 'Statistiques',
             content: (
                 <div className="space-y-6">
+                    <div className="flex items-center justify-between gap-3 rounded-card border border-dashed border-primary/40 bg-primary/5 px-4 py-3">
+                        <div className="min-w-0">
+                            <p className="text-caption font-semibold text-foreground">
+                                Analyse IA du mois
+                            </p>
+                            <p className="text-label-sm text-muted-foreground">
+                                Diagnostic + pistes d'économies + recommandations actionnables.
+                            </p>
+                        </div>
+                        <Button
+                            type="button"
+                            onClick={() => setAnalysisDialogOpen(true)}
+                            disabled={
+                                !stats || (stats.totalExpenses === 0 && stats.totalIncome === 0)
+                            }
+                        >
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Analyser
+                        </Button>
+                    </div>
                     {stats && (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1098,6 +1121,16 @@ const Budget: React.FC = () => {
                 open={scanDialogOpen}
                 onOpenChange={setScanDialogOpen}
                 onExtracted={applyExtractedReceipt}
+            />
+
+            <BudgetAnalysisDialog
+                open={analysisDialogOpen}
+                onOpenChange={setAnalysisDialogOpen}
+                month={currentMonth}
+                year={currentYear}
+                periodLabel={format(new Date(currentYear, currentMonth - 1), 'MMMM yyyy', {
+                    locale: fr,
+                })}
             />
         </div>
     );

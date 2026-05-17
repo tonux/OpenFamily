@@ -113,3 +113,16 @@ export const generateLunchboxIdeasBodySchema = z
     );
 
 export type GenerateLunchboxIdeasBody = z.infer<typeof generateLunchboxIdeasBodySchema>;
+
+// Budget month analysis. The route gathers stats server-side from
+// budget_entries / budget_limits using these (month, year) coordinates, so the
+// client doesn't have to ship its locally-computed numbers (which would let a
+// hostile client influence the AI summary).
+export const analyzeBudgetMonthBodySchema = z
+    .object({
+        month: z.number().int().min(1).max(12),
+        year: z.number().int().min(2000).max(2100),
+    })
+    .strict();
+
+export type AnalyzeBudgetMonthBody = z.infer<typeof analyzeBudgetMonthBodySchema>;

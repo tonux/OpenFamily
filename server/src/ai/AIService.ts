@@ -58,6 +58,11 @@ import {
     buildReceiptExtractionUserMessage,
     receiptExtractionSystemPrompt,
 } from './prompts/receiptPrompts';
+import {
+    type BudgetAnalysisInput,
+    buildBudgetAnalysisUserPrompt,
+    budgetAnalysisSystemPrompt,
+} from './prompts/budgetAnalysisPrompts';
 import type { WeatherSummary } from '../weather/WeatherService';
 
 let cachedProvider: BaseProvider | null = null;
@@ -1012,6 +1017,165 @@ export const extractBudgetEntryFromReceipt = async (
 
 /** Re-export so routes can build the input shape with proper types. */
 export type { ExtractedReceipt, ReceiptExtractionInput } from './prompts/receiptPrompts';
+
+// ---------------------------------------------------------------------------
+// Budget month analysis — Budget page "Analyser avec IA"
+// ---------------------------------------------------------------------------
+
+const BUDGET_VERDICTS_VALID = new Set(['Excellent', 'Sain', 'À surveiller', 'Critique']);
+
+export interface BudgetSavingsOpportunity {
+    category: string;
+    estimatedAmount: number;
+    how: string;
+}
+
+export interface BudgetRecommendation {
+    title: string;
+    detail: string;
+}
+
+export interface BudgetAnalysis {
+    score: number;
+    verdict: 'Excellent' | 'Sain' | 'À surveiller' | 'Critique';
+    summary: string;
+    strengths: string[];
+    weaknesses: string[];
+    savingsOpportunities: BudgetSavingsOpportunity[];
+    recommendations: BudgetRecommendation[];
+    alerts: string[];
+}
+
+export interface AnalyzeBudgetResult {
+    analysis: BudgetAnalysis;
+    model: string;
+}
+
+const sanitizeSavingsOpportunity = (raw: unknown): BudgetSavingsOpportunity | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const category = typeof r.category === 'string' ? r.category.trim().slice(0, 50) : '';
+    const amountRaw =
+        typeof r.estimatedAmount === 'number' ? r.estimatedAmount : Number(r.estimatedAmount);
+    const amount =
+        Number.isFinite(amountRaw) && amountRaw > 0 && amountRaw < 1_000_000_000
+            ? Math.round(amountRaw * 100) / 100
+            : null;
+    const how = typeof r.how === 'string' ? r.how.trim().slice(0, 220) : '';
+    if (!category || amount === null || !how) return null;
+    return { category, estimatedAmount: amount, how };
+};
+
+const sanitizeBudgetRecommendation = (raw: unknown): BudgetRecommendation | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const title = typeof r.title === 'string' ? r.title.trim().slice(0, 80) : '';
+    const detail = typeof r.detail === 'string' ? r.detail.trim().slice(0, 240) : '';
+    if (!title || !detail) return null;
+    return { title, detail };
+};
+
+const sanitizeBudgetAnalysis = (raw: unknown): BudgetAnalysis | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const scoreRaw = typeof r.score === 'number' ? r.score : Number(r.score);
+    const score = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, Math.round(scoreRaw))) : 0;
+
+    const verdict = (
+        typeof r.verdict === 'string' && BUDGET_VERDICTS_VALID.has(r.verdict)
+            ? r.verdict
+            : 'À surveiller'
+    ) as BudgetAnalysis['verdict'];
+
+    const summary = typeof r.summary === 'string' ? r.summary.trim().slice(0, 400) : '';
+    const strengths = stringArray(r.strengths, 5);
+    const weaknesses = stringArray(r.weaknesses, 5);
+    const alerts = stringArray(r.alerts, 3);
+
+    const savingsRaw = Array.isArray(r.savingsOpportunities) ? r.savingsOpportunities : [];
+    const savingsOpportunities: BudgetSavingsOpportunity[] = [];
+    for (const item of savingsRaw) {
+        if (savingsOpportunities.length >= 4) break;
+        const s = sanitizeSavingsOpportunity(item);
+        if (s) savingsOpportunities.push(s);
+    }
+
+    const recoRaw = Array.isArray(r.recommendations) ? r.recommendations : [];
+    const recommendations: BudgetRecommendation[] = [];
+    for (const item of recoRaw) {
+        if (recommendations.length >= 5) break;
+        const reco = sanitizeBudgetRecommendation(item);
+        if (reco) recommendations.push(reco);
+    }
+
+    if (
+        !summary &&
+        strengths.length === 0 &&
+        weaknesses.length === 0 &&
+        recommendations.length === 0 &&
+        alerts.length === 0
+    ) {
+        return null;
+    }
+
+    return {
+        score,
+        verdict,
+        summary,
+        strengths,
+        weaknesses,
+        savingsOpportunities,
+        recommendations,
+        alerts,
+    };
+};
+
+/**
+ * Produce an actionable analysis of one month of budget data, with a 3-month
+ * trend for context. Uses the heavy model: synthesising category breakdowns +
+ * limits + per-member spending + anomalies into prioritised advice benefits
+ * meaningfully from a larger model.
+ *
+ * No cache: the input changes on every entry edit, and a cache key covering
+ * that surface would basically never hit.
+ */
+export const analyzeBudgetMonth = async (
+    input: BudgetAnalysisInput,
+    ctx: { userId: string },
+): Promise<AnalyzeBudgetResult> => {
+    const cfg = getAiConfig();
+    const model = cfg.models.heavy;
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: budgetAnalysisSystemPrompt },
+                { role: 'user', content: buildBudgetAnalysisUserPrompt(input) },
+            ],
+            temperature: 0.3,
+            maxTokens: 1100,
+            jsonMode: true,
+            model,
+        },
+        { userId: ctx.userId, feature: 'budget.analyze_month', model },
+    );
+
+    const parsed = safeParseJson(response.content);
+    const analysis = sanitizeBudgetAnalysis(parsed);
+    if (!analysis) {
+        throw new AiError('BAD_JSON', 'Model did not return a usable budget analysis');
+    }
+
+    return { analysis, model: response.model };
+};
+
+/** Re-export so routes can build the input shape with proper types. */
+export type {
+    BudgetAnalysisInput,
+    BudgetMonthSnapshot,
+    BudgetTrendPoint,
+} from './prompts/budgetAnalysisPrompts';
 
 /** Exposed for tests that swap in a mock provider. */
 export const setAiProviderForTests = (provider: BaseProvider | null): void => {

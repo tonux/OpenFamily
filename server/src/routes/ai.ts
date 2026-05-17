@@ -11,12 +11,16 @@ import {
     analyzeWeeklyMeals,
     generateLunchboxIdeas,
     extractBudgetEntryFromReceipt,
+    analyzeBudgetMonth,
     type RecipeMemberInput,
     type PlannedMealLine,
     type LunchboxMemberInput,
+    type BudgetMonthSnapshot,
+    type BudgetTrendPoint,
 } from '../ai/AIService';
 import { AiError } from '../ai/errors';
 import {
+    analyzeBudgetMonthBodySchema,
     analyzeWeekMealsBodySchema,
     classifyShoppingItemBodySchema,
     clothingSuggestionsBodySchema,
@@ -687,6 +691,244 @@ router.post(
             res.json({ success: true, data: result });
         } catch (error) {
             sendAiError(res, error, 'budget_scan_receipt');
+        }
+    },
+);
+
+/**
+ * POST /api/ai/budget/analyze-month
+ * Body: { month: 1..12, year }
+ * Returns: { analysis, model } — or { aiUnavailable: true } on degraded AI.
+ *
+ * Aggregates everything the model needs server-side from budget_entries,
+ * budget_limits, family_members and users:
+ *   - totals + per-category + per-member breakdown for the target month
+ *   - the configured monthly limits (joined per category)
+ *   - top 8 transactions by amount (to surface anomalies)
+ *   - totals for the 3 previous months (trend context)
+ *   - user's currency + light family summary
+ *
+ * Read-only — never writes anything. Degrades gracefully on DISABLED /
+ * QUOTA_EXCEEDED / BAD_JSON so the dialog can render a soft notice.
+ */
+const toBudgetNumber = (v: unknown): number => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'string') {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+};
+
+router.post(
+    '/budget/analyze-month',
+    validate({ body: analyzeBudgetMonthBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const { month, year } = req.body as import('../schemas/ai').AnalyzeBudgetMonthBody;
+
+            // User currency (defaults to EUR if unset).
+            const userRow = await query('SELECT currency FROM users WHERE id = $1', [req.userId]);
+            const currency =
+                typeof userRow.rows[0]?.currency === 'string' && userRow.rows[0].currency
+                    ? (userRow.rows[0].currency as string)
+                    : 'EUR';
+
+            // Totals + per-category for the target month.
+            const totalsRow = await query(
+                `SELECT
+                    SUM(amount) FILTER (WHERE is_expense = true) AS total_expenses,
+                    SUM(amount) FILTER (WHERE is_expense = false) AS total_income
+                 FROM budget_entries
+                 WHERE user_id = $1
+                   AND EXTRACT(MONTH FROM date) = $2
+                   AND EXTRACT(YEAR FROM date) = $3`,
+                [req.userId, month, year],
+            );
+            const totalExpenses = toBudgetNumber(totalsRow.rows[0]?.total_expenses);
+            const totalIncome = toBudgetNumber(totalsRow.rows[0]?.total_income);
+
+            const categoryRows = await query(
+                `SELECT category, SUM(amount) AS amount
+                 FROM budget_entries
+                 WHERE user_id = $1
+                   AND is_expense = true
+                   AND EXTRACT(MONTH FROM date) = $2
+                   AND EXTRACT(YEAR FROM date) = $3
+                 GROUP BY category
+                 ORDER BY SUM(amount) DESC`,
+                [req.userId, month, year],
+            );
+
+            const limitsRows = await query(
+                `SELECT category, monthly_limit
+                 FROM budget_limits
+                 WHERE user_id = $1 AND month = $2 AND year = $3`,
+                [req.userId, month, year],
+            );
+            const limitsByCategory = new Map<string, number>();
+            for (const r of limitsRows.rows as Array<{
+                category: string;
+                monthly_limit: unknown;
+            }>) {
+                limitsByCategory.set(r.category, toBudgetNumber(r.monthly_limit));
+            }
+
+            // Per-member × category (only entries with assigned_to set).
+            const memberRows = await query(
+                `SELECT fm.name AS member_name, be.category, SUM(be.amount) AS amount
+                 FROM budget_entries be
+                 INNER JOIN family_members fm ON be.assigned_to = fm.id
+                 WHERE be.user_id = $1
+                   AND be.is_expense = true
+                   AND EXTRACT(MONTH FROM be.date) = $2
+                   AND EXTRACT(YEAR FROM be.date) = $3
+                 GROUP BY fm.name, be.category
+                 ORDER BY SUM(be.amount) DESC
+                 LIMIT 20`,
+                [req.userId, month, year],
+            );
+
+            // Top transactions of the month — capped to 8 to keep tokens low.
+            const topRows = await query(
+                `SELECT be.date, be.category, be.amount, be.description, fm.name AS member_name
+                 FROM budget_entries be
+                 LEFT JOIN family_members fm ON be.assigned_to = fm.id
+                 WHERE be.user_id = $1
+                   AND be.is_expense = true
+                   AND EXTRACT(MONTH FROM be.date) = $2
+                   AND EXTRACT(YEAR FROM be.date) = $3
+                 ORDER BY be.amount DESC
+                 LIMIT 8`,
+                [req.userId, month, year],
+            );
+
+            // Trend: 3 months preceding the target month.
+            const trend: BudgetTrendPoint[] = [];
+            for (let i = 3; i >= 1; i -= 1) {
+                let tm = month - i;
+                let ty = year;
+                while (tm <= 0) {
+                    tm += 12;
+                    ty -= 1;
+                }
+                const row = await query(
+                    `SELECT
+                        SUM(amount) FILTER (WHERE is_expense = true) AS total_expenses,
+                        SUM(amount) FILTER (WHERE is_expense = false) AS total_income
+                     FROM budget_entries
+                     WHERE user_id = $1
+                       AND EXTRACT(MONTH FROM date) = $2
+                       AND EXTRACT(YEAR FROM date) = $3`,
+                    [req.userId, tm, ty],
+                );
+                trend.push({
+                    month: tm,
+                    year: ty,
+                    totalExpenses: toBudgetNumber(row.rows[0]?.total_expenses),
+                    totalIncome: toBudgetNumber(row.rows[0]?.total_income),
+                });
+            }
+
+            // Light family summary (kids count) — no PII, no per-member detail beyond first names.
+            const famRow = await query(
+                `SELECT COUNT(*) FILTER (WHERE role = 'Enfant')::int AS kids,
+                        COUNT(*)::int AS total
+                 FROM family_members WHERE user_id = $1`,
+                [req.userId],
+            );
+            const fam = famRow.rows[0] as { kids: number; total: number } | undefined;
+            const familySummary =
+                fam && fam.total > 0
+                    ? `famille de ${fam.total} personne${fam.total > 1 ? 's' : ''}` +
+                      (fam.kids > 0 ? ` dont ${fam.kids} enfant${fam.kids > 1 ? 's' : ''}` : '')
+                    : undefined;
+
+            const snapshot: BudgetMonthSnapshot = {
+                month,
+                year,
+                currency,
+                totalExpenses,
+                totalIncome,
+                balance: totalIncome - totalExpenses,
+                byCategory: categoryRows.rows.map((r: any) => {
+                    const cat = String(r.category);
+                    return {
+                        category: cat,
+                        amount: toBudgetNumber(r.amount),
+                        limit: limitsByCategory.has(cat)
+                            ? (limitsByCategory.get(cat) as number)
+                            : null,
+                    };
+                }),
+                byMember: memberRows.rows.map((r: any) => ({
+                    memberName: String(r.member_name),
+                    category: String(r.category),
+                    amount: toBudgetNumber(r.amount),
+                })),
+                topEntries: topRows.rows.map((r: any) => {
+                    const dateIso =
+                        r.date instanceof Date
+                            ? r.date.toISOString().slice(0, 10)
+                            : String(r.date).slice(0, 10);
+                    return {
+                        date: dateIso,
+                        category: String(r.category),
+                        amount: toBudgetNumber(r.amount),
+                        description:
+                            typeof r.description === 'string' && r.description.trim()
+                                ? r.description.trim()
+                                : null,
+                        memberName:
+                            typeof r.member_name === 'string' && r.member_name.trim()
+                                ? r.member_name.trim()
+                                : null,
+                    };
+                }),
+            };
+
+            // Refuse to call the model on a completely empty month — the
+            // analysis would be vacuous and wastes tokens.
+            if (snapshot.totalExpenses === 0 && snapshot.totalIncome === 0) {
+                return res.json({
+                    success: true,
+                    data: {
+                        analysis: null,
+                        aiUnavailable: false,
+                        code: 'EMPTY_MONTH',
+                        model: '',
+                    },
+                });
+            }
+
+            try {
+                const result = await analyzeBudgetMonth(
+                    { snapshot, trend, familySummary },
+                    { userId: req.userId! },
+                );
+                return res.json({ success: true, data: result });
+            } catch (err) {
+                if (
+                    err instanceof AiError &&
+                    (err.code === 'DISABLED' ||
+                        err.code === 'QUOTA_EXCEEDED' ||
+                        err.code === 'BAD_JSON')
+                ) {
+                    logger.info('ai.budget.degraded', { code: err.code });
+                    return res.json({
+                        success: true,
+                        data: {
+                            analysis: null,
+                            model: '',
+                            aiUnavailable: true,
+                            code: err.code,
+                        },
+                    });
+                }
+                throw err;
+            }
+        } catch (error) {
+            sendAiError(res, error, 'budget_analyze_month');
         }
     },
 );
