@@ -15,9 +15,19 @@ export interface ToolCall {
     function: { name: string; arguments: string };
 }
 
+/**
+ * Multimodal content parts (OpenAI / NVIDIA OpenAI-compatible format). A user
+ * message can carry an image alongside text by setting `content` to an array:
+ *     [{ type: 'text', text: '...' }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,...' } }]
+ * Text-only messages keep `content` as a plain string (simpler call sites).
+ */
+export type ChatContentPart =
+    | { type: 'text'; text: string }
+    | { type: 'image_url'; image_url: { url: string; detail?: 'low' | 'high' | 'auto' } };
+
 export interface ChatMessage {
     role: ChatRole;
-    content: string | null;
+    content: string | null | ChatContentPart[];
     name?: string;
     tool_call_id?: string;
     tool_calls?: ToolCall[];

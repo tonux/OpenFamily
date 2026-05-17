@@ -52,6 +52,12 @@ import {
     buildLunchboxGenerationUserPrompt,
     lunchboxGenerationSystemPrompt,
 } from './prompts/lunchboxPrompts';
+import {
+    type ExtractedReceipt,
+    type ReceiptExtractionInput,
+    buildReceiptExtractionUserMessage,
+    receiptExtractionSystemPrompt,
+} from './prompts/receiptPrompts';
 import type { WeatherSummary } from '../weather/WeatherService';
 
 let cachedProvider: BaseProvider | null = null;
@@ -898,6 +904,114 @@ export type {
     LunchboxLocation,
     LunchboxMemberInput,
 } from './prompts/lunchboxPrompts';
+
+// ---------------------------------------------------------------------------
+// Receipt scanning (vision) — Budget page "Scanner facture"
+// ---------------------------------------------------------------------------
+
+const RECEIPT_CONFIDENCE_VALID = new Set(['high', 'medium', 'low']);
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_CURRENCY_RE = /^[A-Z]{3}$/;
+const MAX_REASONABLE_AMOUNT = 1_000_000_000; // 1 billion in the user currency — anything more is a hallucination.
+
+export interface ExtractReceiptResult {
+    extraction: ExtractedReceipt;
+    model: string;
+}
+
+const sanitizeExtractedReceipt = (raw: unknown): ExtractedReceipt | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    let amount: number | null = null;
+    const rawAmount = typeof r.amount === 'number' ? r.amount : Number(r.amount);
+    if (Number.isFinite(rawAmount) && rawAmount > 0 && rawAmount < MAX_REASONABLE_AMOUNT) {
+        amount = Math.round(rawAmount * 100) / 100;
+    }
+
+    let currency: string | null = null;
+    if (typeof r.currency === 'string') {
+        const cleaned = r.currency.trim().toUpperCase();
+        if (ISO_CURRENCY_RE.test(cleaned)) currency = cleaned;
+    }
+
+    let date: string | null = null;
+    if (typeof r.date === 'string' && ISO_DATE_RE.test(r.date.trim())) {
+        date = r.date.trim();
+    }
+
+    const merchant =
+        typeof r.merchant === 'string' && r.merchant.trim() ? r.merchant.trim().slice(0, 80) : null;
+
+    const categoryRaw = typeof r.category === 'string' ? r.category.trim().slice(0, 50) : '';
+    const category = categoryRaw || 'Autre';
+
+    const description = typeof r.description === 'string' ? r.description.trim().slice(0, 200) : '';
+
+    const confidenceRaw = typeof r.confidence === 'string' ? r.confidence.trim().toLowerCase() : '';
+    const confidence = (
+        RECEIPT_CONFIDENCE_VALID.has(confidenceRaw) ? confidenceRaw : 'low'
+    ) as ExtractedReceipt['confidence'];
+
+    return {
+        amount,
+        currency,
+        date,
+        merchant,
+        category,
+        description,
+        confidence,
+        warnings: stringArray(r.warnings, 3),
+    };
+};
+
+/**
+ * Extract the fields needed to create a budget entry from a receipt photo.
+ * Uses the configured vision model (cfg.models.vision). The image is sent
+ * inline as a base64 data URL in the user message content array — the
+ * provider sees a standard OpenAI-style multimodal payload.
+ *
+ * Returns sanitised values: amount in a reasonable range, ISO date string or
+ * null, ISO 4217 currency or null, confidence bounded to the three allowed
+ * labels. The route never persists the image itself; this method receives the
+ * already-encoded data URL.
+ */
+export const extractBudgetEntryFromReceipt = async (
+    input: ReceiptExtractionInput,
+    ctx: { userId: string },
+): Promise<ExtractReceiptResult> => {
+    if (!input.imageDataUrl.startsWith('data:image/')) {
+        throw new AiError('BAD_REQUEST', 'imageDataUrl must be a data:image/* URL');
+    }
+
+    const cfg = getAiConfig();
+    const model = cfg.models.vision;
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: receiptExtractionSystemPrompt },
+                { role: 'user', content: buildReceiptExtractionUserMessage(input) },
+            ],
+            temperature: 0,
+            maxTokens: 500,
+            jsonMode: true,
+            model,
+        },
+        { userId: ctx.userId, feature: 'budget.scan_receipt', model },
+    );
+
+    const parsed = safeParseJson(response.content);
+    const extraction = sanitizeExtractedReceipt(parsed);
+    if (!extraction) {
+        throw new AiError('BAD_JSON', 'Model did not return a usable receipt extraction');
+    }
+
+    return { extraction, model: response.model };
+};
+
+/** Re-export so routes can build the input shape with proper types. */
+export type { ExtractedReceipt, ReceiptExtractionInput } from './prompts/receiptPrompts';
 
 /** Exposed for tests that swap in a mock provider. */
 export const setAiProviderForTests = (provider: BaseProvider | null): void => {

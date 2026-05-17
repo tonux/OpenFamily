@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import {
@@ -9,6 +10,7 @@ import {
     generateRecipesFromIngredients,
     analyzeWeeklyMeals,
     generateLunchboxIdeas,
+    extractBudgetEntryFromReceipt,
     type RecipeMemberInput,
     type PlannedMealLine,
     type LunchboxMemberInput,
@@ -32,6 +34,30 @@ const router = Router();
 // All AI routes require authentication. PR #1 only exposes /health — we wire
 // auth here so future PRs (#17-#20) can add features without re-thinking it.
 router.use(authMiddleware);
+
+// Multer config for the receipt scanner only — stays in memory, never touches
+// disk or MinIO. 5 MB cap is enough for a smartphone JPEG; anything bigger is
+// either a misuse or needs downscaling client-side first.
+const RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
+const RECEIPT_ALLOWED_MIME = new Set([
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+]);
+const RECEIPT_DEFAULT_CATEGORIES = [
+    'Alimentation',
+    'Santé',
+    'Enfants',
+    'Maison',
+    'Loisirs',
+    'Autre',
+];
+const receiptUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: RECEIPT_MAX_BYTES, files: 1 },
+});
 
 const sendAiError = (res: import('express').Response, error: unknown, feature: string): void => {
     if (error instanceof AiError) {
@@ -587,6 +613,80 @@ router.post(
             res.json({ success: true, data: result });
         } catch (error) {
             sendAiError(res, error, 'lunchbox_generate');
+        }
+    },
+);
+
+/**
+ * POST /api/ai/budget/scan-receipt
+ * Content-Type: multipart/form-data
+ * Body: file (single image, ≤ 5 MB, JPEG/PNG/WEBP/HEIC/HEIF)
+ * Returns: { extraction: ExtractedReceipt, model: string }
+ *
+ * The image is held in memory just long enough to be encoded as a base64
+ * data URL and sent to the vision model. Nothing is persisted server-side.
+ *
+ * The user's saved currency is fetched and passed to the model so it knows
+ * which currency to disambiguate when several are visible on the ticket.
+ */
+router.post(
+    '/budget/scan-receipt',
+    (req, res, next) => {
+        receiptUpload.single('file')(req, res, (err: unknown) => {
+            if (!err) return next();
+            if ((err as { code?: string })?.code === 'LIMIT_FILE_SIZE') {
+                return res.status(413).json({
+                    success: false,
+                    error: {
+                        code: 'FILE_TOO_LARGE',
+                        message: `Image trop volumineuse (max ${RECEIPT_MAX_BYTES / (1024 * 1024)} MB)`,
+                    },
+                });
+            }
+            logger.warn('ai.scan_receipt_multer_error', {
+                error: err instanceof Error ? err.message : String(err),
+            });
+            return res.status(400).json({ success: false, error: 'Upload error' });
+        });
+    },
+    async (req: AuthRequest, res) => {
+        try {
+            const file = (req as AuthRequest & { file?: Express.Multer.File }).file;
+            if (!file) {
+                return res
+                    .status(400)
+                    .json({ success: false, error: 'Missing "file" multipart field' });
+            }
+            if (!RECEIPT_ALLOWED_MIME.has(file.mimetype)) {
+                return res.status(415).json({
+                    success: false,
+                    error: {
+                        code: 'UNSUPPORTED_MIME',
+                        message: `Type d'image non supporté : ${file.mimetype}`,
+                    },
+                });
+            }
+
+            const userRow = await query('SELECT currency FROM users WHERE id = $1', [req.userId]);
+            const userCurrency =
+                typeof userRow.rows[0]?.currency === 'string'
+                    ? (userRow.rows[0].currency as string)
+                    : undefined;
+
+            const imageDataUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+
+            const result = await extractBudgetEntryFromReceipt(
+                {
+                    imageDataUrl,
+                    suggestedCategories: RECEIPT_DEFAULT_CATEGORIES,
+                    userCurrency,
+                },
+                { userId: req.userId! },
+            );
+
+            res.json({ success: true, data: result });
+        } catch (error) {
+            sendAiError(res, error, 'budget_scan_receipt');
         }
     },
 );

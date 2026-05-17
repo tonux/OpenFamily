@@ -11,7 +11,9 @@ import {
     Users,
     ChevronLeft,
     ChevronRight,
+    ScanLine,
 } from 'lucide-react';
+import { ReceiptScanDialog, type ExtractedReceipt } from '../components/app/ReceiptScanDialog';
 import {
     Card,
     CardContent,
@@ -135,6 +137,7 @@ const Budget: React.FC = () => {
     const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [scanDialogOpen, setScanDialogOpen] = useState(false);
     const [limitDialogOpen, setLimitDialogOpen] = useState(false);
     const [editingEntry, setEditingEntry] = useState<BudgetEntry | null>(null);
     const [formError, setFormError] = useState('');
@@ -382,6 +385,27 @@ const Budget: React.FC = () => {
         });
     };
 
+    // Pre-fills the entry form from a receipt extraction and opens the existing
+    // "Nouvelle entrée" dialog so the user can review/adjust before saving.
+    // We never auto-save: financial amounts always go through a human confirm.
+    const applyExtractedReceipt = (e: ExtractedReceipt) => {
+        const descriptionParts: string[] = [];
+        if (e.merchant) descriptionParts.push(e.merchant);
+        if (e.description) descriptionParts.push(e.description);
+        setEditingEntry(null);
+        setFormError('');
+        setFormData({
+            category: e.category || 'Autre',
+            amount: e.amount !== null ? e.amount.toFixed(2) : '',
+            description: descriptionParts.join(' — '),
+            date: e.date ?? format(new Date(), 'yyyy-MM-dd'),
+            is_expense: true,
+            assigned_to: '',
+        });
+        setScanDialogOpen(false);
+        setDialogOpen(true);
+    };
+
     const resetLimitForm = () => {
         setLimitError('');
         setLimitFormData({
@@ -452,15 +476,21 @@ const Budget: React.FC = () => {
                                 />
                             )}
                         </div>
-                        <Button
-                            onClick={() => {
-                                resetForm();
-                                setDialogOpen(true);
-                            }}
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Nouvelle entrée
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button variant="secondary" onClick={() => setScanDialogOpen(true)}>
+                                <ScanLine className="w-4 h-4 mr-2" />
+                                Scanner facture
+                            </Button>
+                            <Button
+                                onClick={() => {
+                                    resetForm();
+                                    setDialogOpen(true);
+                                }}
+                            >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Nouvelle entrée
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="space-y-3">
@@ -944,14 +974,23 @@ const Budget: React.FC = () => {
                         </label>
                     </div>
                     <div>
-                        <label className="block text-label font-medium text-foreground mb-1.5">
-                            Catégorie
-                        </label>
-                        <Select
+                        <Input
+                            label="Catégorie"
                             value={formData.category}
-                            onValueChange={(value) => setFormData({ ...formData, category: value })}
-                            options={CATEGORIES}
+                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                            placeholder="Alimentation, Carburant…"
+                            list="budget-category-suggestions"
+                            maxLength={50}
+                            required
                         />
+                        <datalist id="budget-category-suggestions">
+                            {CATEGORIES.map((c) => (
+                                <option key={c.value} value={c.value} />
+                            ))}
+                        </datalist>
+                        <p className="mt-1.5 text-micro text-muted-foreground">
+                            Choisis dans la liste ou tape ta propre catégorie.
+                        </p>
                     </div>
                     <Input
                         label={`Montant (${currencySymbol})`}
@@ -1054,6 +1093,12 @@ const Budget: React.FC = () => {
                     </div>
                 </form>
             </Dialog>
+
+            <ReceiptScanDialog
+                open={scanDialogOpen}
+                onOpenChange={setScanDialogOpen}
+                onExtracted={applyExtractedReceipt}
+            />
         </div>
     );
 };
