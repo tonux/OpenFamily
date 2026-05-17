@@ -12,11 +12,15 @@ import {
     generateLunchboxIdeas,
     extractBudgetEntryFromReceipt,
     analyzeBudgetMonth,
+    generateVacationPlan,
+    generateVacationLuggage,
     type RecipeMemberInput,
     type PlannedMealLine,
     type LunchboxMemberInput,
     type BudgetMonthSnapshot,
     type BudgetTrendPoint,
+    type VacationPlanParticipant,
+    type VacationLuggageParticipant,
 } from '../ai/AIService';
 import { AiError } from '../ai/errors';
 import {
@@ -26,6 +30,8 @@ import {
     clothingSuggestionsBodySchema,
     generateLunchboxIdeasBodySchema,
     generateRecipesBodySchema,
+    generateVacationLuggageBodySchema,
+    generateVacationPlanBodySchema,
     parseShoppingNLBodySchema,
 } from '../schemas/ai';
 import { query } from '../db';
@@ -929,6 +935,240 @@ router.post(
             }
         } catch (error) {
             sendAiError(res, error, 'budget_analyze_month');
+        }
+    },
+);
+
+// ===========================================================================
+// Vacation AI endpoints — itinerary + luggage generation
+// ===========================================================================
+
+const ymd = (value: unknown): string => {
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    const s = String(value);
+    return s.slice(0, 10);
+};
+
+const daysInclusive = (start: string, end: string): number => {
+    const s = new Date(start);
+    const e = new Date(end);
+    return Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1);
+};
+
+const computeAgeYears = (birthDate: unknown, reference: Date): number | null => {
+    if (!birthDate) return null;
+    const d = birthDate instanceof Date ? birthDate : new Date(String(birthDate));
+    if (Number.isNaN(d.getTime())) return null;
+    let age = reference.getFullYear() - d.getFullYear();
+    const m = reference.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && reference.getDate() < d.getDate())) age -= 1;
+    return Math.max(0, age);
+};
+
+router.post(
+    '/vacations/plan',
+    validate({ body: generateVacationPlanBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const body = req.body as import('../schemas/ai').GenerateVacationPlanBody;
+            const { vacationId, extraNotes, persist } = body;
+
+            const vacationRow = await query(
+                `SELECT id, destination, country, start_date, end_date, accommodation_type,
+                        budget_planned, objectives, notes
+                 FROM vacations WHERE id = $1 AND user_id = $2`,
+                [vacationId, req.userId],
+            );
+            if (vacationRow.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Vacation not found' });
+            }
+            const v = vacationRow.rows[0] as {
+                destination: string;
+                country: string | null;
+                start_date: Date | string;
+                end_date: Date | string;
+                accommodation_type: string | null;
+                budget_planned: string | number | null;
+                objectives: string[] | null;
+                notes: string | null;
+            };
+
+            const userRow = await query('SELECT currency FROM users WHERE id = $1', [req.userId]);
+            const currency =
+                typeof userRow.rows[0]?.currency === 'string' && userRow.rows[0].currency
+                    ? (userRow.rows[0].currency as string)
+                    : 'EUR';
+
+            const participantsRows = await query(
+                `SELECT fm.name, fm.birth_date
+                 FROM vacation_participants vp
+                 INNER JOIN family_members fm ON vp.family_member_id = fm.id
+                 WHERE vp.vacation_id = $1
+                 ORDER BY fm.name`,
+                [vacationId],
+            );
+            const referenceDate = new Date(ymd(v.start_date));
+            const participants: VacationPlanParticipant[] = participantsRows.rows.map((r: any) => ({
+                name: String(r.name),
+                ageYears: computeAgeYears(r.birth_date, referenceDate),
+            }));
+
+            const startDate = ymd(v.start_date);
+            const endDate = ymd(v.end_date);
+            const days = daysInclusive(startDate, endDate);
+            const budgetPlanned =
+                v.budget_planned === null || v.budget_planned === undefined
+                    ? null
+                    : Number(v.budget_planned);
+
+            const result = await generateVacationPlan(
+                {
+                    destination: v.destination,
+                    country: v.country,
+                    startDate,
+                    endDate,
+                    days,
+                    objectives: Array.isArray(v.objectives) ? v.objectives : [],
+                    accommodationType: v.accommodation_type,
+                    budgetPlanned: Number.isFinite(budgetPlanned) ? budgetPlanned : null,
+                    currency,
+                    participants,
+                    notes: extraNotes
+                        ? v.notes
+                            ? `${v.notes}\n\n${extraNotes}`
+                            : extraNotes
+                        : v.notes,
+                },
+                { userId: req.userId! },
+            );
+
+            if (persist) {
+                for (const day of result.plan.days) {
+                    await query(
+                        `INSERT INTO vacation_itinerary
+                            (vacation_id, day_number, date, theme, activities, meals_suggestions, estimated_cost, transport_notes, notes)
+                         VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9)
+                         ON CONFLICT (vacation_id, day_number)
+                         DO UPDATE SET date = EXCLUDED.date, theme = EXCLUDED.theme,
+                             activities = EXCLUDED.activities, meals_suggestions = EXCLUDED.meals_suggestions,
+                             estimated_cost = EXCLUDED.estimated_cost, transport_notes = EXCLUDED.transport_notes,
+                             notes = EXCLUDED.notes`,
+                        [
+                            vacationId,
+                            day.dayNumber,
+                            day.date,
+                            day.theme || null,
+                            JSON.stringify(day.activities),
+                            JSON.stringify(day.meals_suggestions),
+                            day.estimated_cost,
+                            day.transport_notes,
+                            day.notes,
+                        ],
+                    );
+                }
+            }
+
+            res.json({ success: true, data: result });
+        } catch (error) {
+            sendAiError(res, error, 'vacation_plan');
+        }
+    },
+);
+
+router.post(
+    '/vacations/luggage',
+    validate({ body: generateVacationLuggageBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const body = req.body as import('../schemas/ai').GenerateVacationLuggageBody;
+            const { vacationId, extraNotes, replace } = body;
+
+            const vacationRow = await query(
+                `SELECT id, destination, country, start_date, end_date,
+                        accommodation_type, objectives, notes
+                 FROM vacations WHERE id = $1 AND user_id = $2`,
+                [vacationId, req.userId],
+            );
+            if (vacationRow.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Vacation not found' });
+            }
+            const v = vacationRow.rows[0] as {
+                destination: string;
+                country: string | null;
+                start_date: Date | string;
+                end_date: Date | string;
+                accommodation_type: string | null;
+                objectives: string[] | null;
+                notes: string | null;
+            };
+
+            const participantsRows = await query(
+                `SELECT fm.id, fm.name, fm.birth_date
+                 FROM vacation_participants vp
+                 INNER JOIN family_members fm ON vp.family_member_id = fm.id
+                 WHERE vp.vacation_id = $1
+                 ORDER BY fm.name`,
+                [vacationId],
+            );
+            const startDate = ymd(v.start_date);
+            const endDate = ymd(v.end_date);
+            const referenceDate = new Date(startDate);
+            const participants: VacationLuggageParticipant[] = participantsRows.rows.map(
+                (r: any) => ({
+                    id: String(r.id),
+                    name: String(r.name),
+                    ageYears: computeAgeYears(r.birth_date, referenceDate),
+                }),
+            );
+            const validParticipantIds = new Set(participants.map((p) => p.id));
+
+            const result = await generateVacationLuggage(
+                {
+                    destination: v.destination,
+                    country: v.country,
+                    startDate,
+                    endDate,
+                    days: daysInclusive(startDate, endDate),
+                    accommodationType: v.accommodation_type,
+                    objectives: Array.isArray(v.objectives) ? v.objectives : [],
+                    participants,
+                    notes: extraNotes
+                        ? v.notes
+                            ? `${v.notes}\n\n${extraNotes}`
+                            : extraNotes
+                        : v.notes,
+                },
+                { userId: req.userId! },
+            );
+
+            if (replace) {
+                await query('DELETE FROM vacation_luggage WHERE vacation_id = $1', [vacationId]);
+            }
+
+            // Bulk insert. We trust the sanitizer in AIService — owner is "shared"
+            // or a valid participant id, category is one of the seven values.
+            for (const item of result.luggage.items) {
+                const memberId =
+                    item.owner === 'shared' || !validParticipantIds.has(item.owner)
+                        ? null
+                        : item.owner;
+                await query(
+                    `INSERT INTO vacation_luggage (vacation_id, family_member_id, category, item, quantity, notes)
+                     VALUES ($1,$2,$3,$4,$5,$6)`,
+                    [vacationId, memberId, item.category, item.item, item.quantity, item.notes],
+                );
+            }
+
+            res.json({
+                success: true,
+                data: {
+                    inserted: result.luggage.items.length,
+                    warnings: result.luggage.warnings,
+                    model: result.model,
+                },
+            });
+        } catch (error) {
+            sendAiError(res, error, 'vacation_luggage');
         }
     },
 );

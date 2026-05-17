@@ -152,6 +152,96 @@ export interface BudgetLimit extends BaseEntity {
     year: number;
 }
 
+// Vacation
+export type VacationStatus = 'planning' | 'upcoming' | 'ongoing' | 'past' | 'cancelled';
+export type VacationAccommodationType =
+    | 'airbnb'
+    | 'chalet'
+    | 'hotel'
+    | 'camping'
+    | 'family'
+    | 'other';
+export type LuggageCategory =
+    | 'clothing'
+    | 'toiletries'
+    | 'documents'
+    | 'health'
+    | 'electronics'
+    | 'kids'
+    | 'misc';
+export type ItineraryMeal = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export interface ItineraryActivity {
+    id: string;
+    title: string;
+    time?: string;
+    duration_min?: number;
+    cost?: number;
+    location?: string;
+    notes?: string;
+}
+
+export interface ItineraryMealSuggestion {
+    meal: ItineraryMeal;
+    suggestion: string;
+    restaurant?: string;
+    cost?: number;
+}
+
+export interface VacationItineraryDay extends BaseEntity {
+    vacation_id: string;
+    day_number: number;
+    date: Date;
+    theme?: string;
+    activities: ItineraryActivity[];
+    meals_suggestions: ItineraryMealSuggestion[];
+    estimated_cost?: number;
+    transport_notes?: string;
+    notes?: string;
+}
+
+export interface VacationLuggageItem extends BaseEntity {
+    vacation_id: string;
+    family_member_id?: string | null;
+    family_member_name?: string;
+    family_member_color?: string;
+    category: LuggageCategory;
+    item: string;
+    quantity: number;
+    packed: boolean;
+    notes?: string;
+}
+
+export interface VacationParticipant {
+    id: string;
+    name: string;
+    color: string;
+}
+
+export interface Vacation extends BaseEntity {
+    user_id: string;
+    title: string;
+    destination: string;
+    country?: string;
+    start_date: Date;
+    end_date: Date;
+    status: VacationStatus;
+    accommodation_type?: VacationAccommodationType;
+    accommodation_name?: string;
+    accommodation_url?: string;
+    accommodation_address?: string;
+    accommodation_contact?: string;
+    budget_planned?: number;
+    actual_cost?: number;
+    objectives: string[];
+    notes?: string;
+    rating?: number;
+    review_text?: string;
+    participants?: VacationParticipant[];
+    itinerary?: VacationItineraryDay[];
+    luggage?: VacationLuggageItem[];
+}
+
 // Notification
 export interface Notification extends BaseEntity {
     user_id: string;
