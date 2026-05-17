@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { usePrivacy } from '../../contexts/PrivacyContext';
 import {
     Home,
     ShoppingCart,
@@ -21,6 +22,8 @@ import {
     Menu,
     X,
     Plus,
+    Eye,
+    EyeOff,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
@@ -78,6 +81,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const location = useLocation();
     const { user, logout } = useAuth();
     const { setTheme, actualTheme } = useTheme();
+    const { hideAmounts, toggleHideAmounts } = usePrivacy();
     const { t } = useTranslation();
     const [sidebarOpen, setSidebarOpen] = React.useState(false);
     const [quickActionsOpen, setQuickActionsOpen] = React.useState(false);
@@ -186,6 +190,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                                 )}
                             </Button>
                             <Button
+                                variant="secondary"
+                                size="icon"
+                                onClick={toggleHideAmounts}
+                                aria-label={
+                                    hideAmounts ? 'Afficher les montants' : 'Masquer les montants'
+                                }
+                                aria-pressed={hideAmounts}
+                                title={
+                                    hideAmounts ? 'Afficher les montants' : 'Masquer les montants'
+                                }
+                                className="flex-1"
+                            >
+                                {hideAmounts ? (
+                                    <EyeOff className="h-4 w-4" />
+                                ) : (
+                                    <Eye className="h-4 w-4" />
+                                )}
+                            </Button>
+                            <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={logout}
@@ -225,6 +248,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         </div>
 
                         <div className="flex items-center gap-2">
+                            <Button
+                                variant="secondary"
+                                size="icon"
+                                onClick={toggleHideAmounts}
+                                aria-label={
+                                    hideAmounts ? 'Afficher les montants' : 'Masquer les montants'
+                                }
+                                aria-pressed={hideAmounts}
+                                title={
+                                    hideAmounts ? 'Afficher les montants' : 'Masquer les montants'
+                                }
+                            >
+                                {hideAmounts ? (
+                                    <EyeOff className="h-4 w-4" />
+                                ) : (
+                                    <Eye className="h-4 w-4" />
+                                )}
+                            </Button>
                             <NotificationsBell />
                             <div className="hidden items-center gap-2 lg:flex">
                                 <Button

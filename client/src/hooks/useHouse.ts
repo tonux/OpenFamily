@@ -484,6 +484,9 @@ export const useDeleteContact = () => {
 
 // ---------- Rooms & Items (Phase 4) ----------
 
+// Suggested categories — the API accepts any short string so users can type
+// their own ("Grenier nord", "Cabane jardin", "Mezzanine"…) when the
+// suggestion list doesn't fit their home.
 export const ROOM_CATEGORIES = [
     'Salon',
     'Cuisine',
@@ -505,7 +508,7 @@ export const ROOM_CATEGORIES = [
     'Entrée',
     'Autre',
 ] as const;
-export type RoomCategory = (typeof ROOM_CATEGORIES)[number];
+export type RoomCategory = string;
 
 export const ITEM_CATEGORIES = [
     'Outils',

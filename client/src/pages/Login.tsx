@@ -170,12 +170,12 @@ const Login: React.FC = () => {
                 <p className="absolute bottom-6 text-label-sm text-muted-foreground text-center w-full">
                     &copy; {new Date().getFullYear()} KeurTonux{' '}
                     <a
-                        href="https://nexaflow.fr"
+                        href="https://tonuxcorp.dev"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary hover:underline"
                     >
-                        NexaFlow
+                        tonuxcorp
                     </a>{' '}
                     &middot; Confiance & Sécurité
                 </p>

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Dialog } from '../ui/Dialog';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { Select } from '../ui/Select';
 import { Textarea } from '../ui/Textarea';
 import {
     type Room,
@@ -76,9 +75,18 @@ const RoomDialog: React.FC<Props> = ({ open, onOpenChange, room }) => {
             setError('Le nom de la pièce est requis.');
             return;
         }
+        const category = form.category.trim();
+        if (!category) {
+            setError('La catégorie est requise.');
+            return;
+        }
+        if (category.length > 32) {
+            setError('La catégorie est trop longue (32 caractères max).');
+            return;
+        }
         const body = {
             name: form.name.trim(),
-            category: form.category,
+            category,
             color: form.color,
             notes: form.notes.trim() || null,
         };
@@ -123,14 +131,23 @@ const RoomDialog: React.FC<Props> = ({ open, onOpenChange, room }) => {
                     required
                 />
                 <div>
-                    <label className="block text-label font-medium text-foreground mb-1.5">
-                        Catégorie *
-                    </label>
-                    <Select
+                    <Input
+                        label="Catégorie *"
                         value={form.category}
-                        onValueChange={(v) => setForm({ ...form, category: v as RoomCategory })}
-                        options={ROOM_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                        onChange={(e) => setForm({ ...form, category: e.target.value })}
+                        placeholder="Salon, Grenier, Cabane jardin…"
+                        list="room-category-suggestions"
+                        maxLength={32}
+                        required
                     />
+                    <datalist id="room-category-suggestions">
+                        {ROOM_CATEGORIES.map((c) => (
+                            <option key={c} value={c} />
+                        ))}
+                    </datalist>
+                    <p className="mt-1.5 text-micro text-muted-foreground">
+                        Choisis dans la liste ou tape ta propre catégorie.
+                    </p>
                 </div>
                 <div>
                     <label className="block text-label font-medium text-foreground mb-1.5">

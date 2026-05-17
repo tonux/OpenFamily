@@ -218,7 +218,7 @@ Laisser l'utilisateur choisir via les settings : provider + modèle + clé API.
 - **Module "Documents"** : stockage chiffré (KMS local) des PDF importants (carte vitale, ordonnances, factures…). Tags par membre. Sortable PDF zippé chiffré à la demande.
 - **Module "Maison"** : inventaire des biens (garantie, date d'achat, facture liée → relais module Documents), planning d'entretien (filtre VMC tous les 3 mois, vidange…).
 - **Mode "Voisinage / co-parentalité"** : partager un sous-ensemble de planning avec un autre foyer (grands-parents, ex-conjoint). Permissions fines par module.
-- **Marketplace de templates** : les utilisateurs partagent (opt-in) leurs templates de listes / planning / recettes sur un hub public NexaFlow. Croissance organique.
+- **Marketplace de templates** : les utilisateurs partagent (opt-in) leurs templates de listes / planning / recettes sur un hub public tonuxcorp.dev. Croissance organique.
 
 ### Bonus tech (open source quality)
 

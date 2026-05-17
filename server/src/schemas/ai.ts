@@ -78,3 +78,38 @@ export const analyzeWeekMealsBodySchema = z
     });
 
 export type AnalyzeWeekMealsBody = z.infer<typeof analyzeWeekMealsBodySchema>;
+
+// Lunchbox idea generator. Each "available" list is independent — the user
+// might list only fruits and snacks, leaving mains/drinks empty. familyMemberId
+// (optional) lets the server merge that child's age/allergies/regime into the
+// prompt without the client needing access to that data.
+const lunchboxItemArray = z.array(z.string().trim().min(1).max(80)).max(30);
+
+export const generateLunchboxIdeasBodySchema = z
+    .object({
+        availableMains: lunchboxItemArray.optional(),
+        availableFruits: lunchboxItemArray.optional(),
+        availableSnacks: lunchboxItemArray.optional(),
+        availableDrinks: lunchboxItemArray.optional(),
+        location: z.enum(['school', 'daycare', 'outing', 'work', 'travel', 'other']),
+        familyMemberId: z.string().uuid().optional(),
+        count: z
+            .union([z.literal(1), z.literal(2), z.literal(3)])
+            .optional()
+            .default(3),
+        context: z.string().trim().max(280).optional(),
+    })
+    .strict()
+    .refine(
+        (v) =>
+            (v.availableMains?.length ?? 0) +
+                (v.availableFruits?.length ?? 0) +
+                (v.availableSnacks?.length ?? 0) +
+                (v.availableDrinks?.length ?? 0) >
+            0,
+        {
+            message: 'At least one available item (fruit, snack, main or drink) is required',
+        },
+    );
+
+export type GenerateLunchboxIdeasBody = z.infer<typeof generateLunchboxIdeasBodySchema>;

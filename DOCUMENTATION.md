@@ -16,7 +16,7 @@
 
 ## Présentation
 
-**KeurTonux** est une application **open source** de gestion familiale développée par **NexaFlow France**. Elle est conçue pour être **auto-hébergée** (self-hosted), ce qui signifie que chaque famille peut la déployer sur son propre serveur et garder le **contrôle total de ses données personnelles**.
+**KeurTonux** est une application **open source** de gestion familiale développée par **tonuxcorp.dev France**. Elle est conçue pour être **auto-hébergée** (self-hosted), ce qui signifie que chaque famille peut la déployer sur son propre serveur et garder le **contrôle total de ses données personnelles**.
 
 L'application est accessible depuis n'importe quel appareil (ordinateur, tablette, smartphone) grâce à son interface web responsive et sa nature de **Progressive Web App (PWA)**, qui permet de l'installer directement sur l'écran d'accueil d'un téléphone ou d'un ordinateur, comme une application native.
 
@@ -343,7 +343,7 @@ L'application se déploie en **3 conteneurs Docker** orchestrés par Docker Comp
 
 ```bash
 # Cloner et configurer
-git clone https://github.com/NexaFlowFrance/KeurTonux.git
+git clone https://github.com/tonuxcorp.devFrance/KeurTonux.git
 cd KeurTonux
 cp .env.example .env  # Configurer les variables
 
@@ -372,6 +372,6 @@ npm run dev             # Lance client (port 5173) + serveur (port 3001)
 
 ---
 
-> **Dépôt GitHub** : [https://github.com/NexaFlowFrance/KeurTonux](https://github.com/NexaFlowFrance/KeurTonux)
+> **Dépôt GitHub** : [https://github.com/tonuxcorp.devFrance/KeurTonux](https://github.com/tonuxcorp.devFrance/KeurTonux)
 > **Licence** : GNU AGPL v3
-> **Auteur** : NexaFlow France
+> **Auteur** : tonuxcorp.dev France

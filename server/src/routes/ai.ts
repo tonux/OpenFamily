@@ -8,14 +8,17 @@ import {
     suggestClothingForKids,
     generateRecipesFromIngredients,
     analyzeWeeklyMeals,
+    generateLunchboxIdeas,
     type RecipeMemberInput,
     type PlannedMealLine,
+    type LunchboxMemberInput,
 } from '../ai/AIService';
 import { AiError } from '../ai/errors';
 import {
     analyzeWeekMealsBodySchema,
     classifyShoppingItemBodySchema,
     clothingSuggestionsBodySchema,
+    generateLunchboxIdeasBodySchema,
     generateRecipesBodySchema,
     parseShoppingNLBodySchema,
 } from '../schemas/ai';
@@ -509,6 +512,81 @@ router.post(
             }
         } catch (error) {
             sendAiError(res, error, 'meals_analyze_week');
+        }
+    },
+);
+
+/**
+ * POST /api/ai/lunchbox/generate
+ * Body: { availableMains?[], availableFruits?[], availableSnacks?[],
+ *         availableDrinks?[], location, familyMemberId?, count?, context? }
+ * Returns: { ideas: LunchboxIdea[], cached, model }
+ *
+ * Same pattern as /recipes/generate: when familyMemberId is provided the
+ * server fetches that child's age / allergies / dietary_preferences and merges
+ * them into the AI prompt. Allergies are passed as a HARD constraint.
+ *
+ * The client gets ideas only — nothing is persisted. The user picks one in
+ * the UI and the existing /api/meal-plans flow saves the lunchbox.
+ */
+router.post(
+    '/lunchbox/generate',
+    validate({ body: generateLunchboxIdeasBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const body = req.body as import('../schemas/ai').GenerateLunchboxIdeasBody;
+
+            let member: LunchboxMemberInput | undefined;
+            if (body.familyMemberId) {
+                const memberRows = await query(
+                    `SELECT name, birth_date, allergies, dietary_preferences
+                     FROM family_members
+                     WHERE user_id = $1 AND id = $2`,
+                    [req.userId, body.familyMemberId],
+                );
+                const row = memberRows.rows[0] as
+                    | {
+                          name: string;
+                          birth_date: string | Date | null;
+                          allergies: unknown;
+                          dietary_preferences: unknown;
+                      }
+                    | undefined;
+                if (row) {
+                    const prefs = parseDietaryPrefsRow(row.dietary_preferences);
+                    member = {
+                        name: row.name,
+                        ageYears: ageYearsFromBirthDateOpt(row.birth_date),
+                        allergies: parseAllergiesText(row.allergies),
+                        regime:
+                            typeof prefs.regime === 'string' ? (prefs.regime as any) : undefined,
+                        dislikes: Array.isArray(prefs.dislikes)
+                            ? (prefs.dislikes as string[])
+                            : undefined,
+                        favorites: Array.isArray(prefs.favorites)
+                            ? (prefs.favorites as string[])
+                            : undefined,
+                    };
+                }
+            }
+
+            const result = await generateLunchboxIdeas(
+                {
+                    availableMains: body.availableMains,
+                    availableFruits: body.availableFruits,
+                    availableSnacks: body.availableSnacks,
+                    availableDrinks: body.availableDrinks,
+                    location: body.location,
+                    member,
+                    count: body.count,
+                    notesContext: body.context,
+                },
+                { userId: req.userId! },
+            );
+
+            res.json({ success: true, data: result });
+        } catch (error) {
+            sendAiError(res, error, 'lunchbox_generate');
         }
     },
 );

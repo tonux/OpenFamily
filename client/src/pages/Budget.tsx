@@ -626,8 +626,18 @@ const Budget: React.FC = () => {
                                                 <BarChart data={chartData}>
                                                     <CartesianGrid strokeDasharray="3 3" />
                                                     <XAxis dataKey="name" />
-                                                    <YAxis />
-                                                    <Tooltip />
+                                                    <YAxis
+                                                        tickFormatter={(value: number) =>
+                                                            formatMoney(value, {
+                                                                maximumFractionDigits: 0,
+                                                            })
+                                                        }
+                                                    />
+                                                    <Tooltip
+                                                        formatter={(value: number) =>
+                                                            formatMoney(value)
+                                                        }
+                                                    />
                                                     <Bar
                                                         dataKey="montant"
                                                         fill="rgb(var(--primary))"
@@ -708,7 +718,13 @@ const Budget: React.FC = () => {
                                                     <BarChart data={memberChartData}>
                                                         <CartesianGrid strokeDasharray="3 3" />
                                                         <XAxis dataKey="name" />
-                                                        <YAxis />
+                                                        <YAxis
+                                                            tickFormatter={(value: number) =>
+                                                                formatMoney(value, {
+                                                                    maximumFractionDigits: 0,
+                                                                })
+                                                            }
+                                                        />
                                                         <Tooltip
                                                             formatter={(value: number) =>
                                                                 formatMoney(value)
@@ -751,7 +767,13 @@ const Budget: React.FC = () => {
                                             >
                                                 <CartesianGrid strokeDasharray="3 3" />
                                                 <XAxis dataKey="name" />
-                                                <YAxis />
+                                                <YAxis
+                                                    tickFormatter={(value: number) =>
+                                                        formatMoney(value, {
+                                                            maximumFractionDigits: 0,
+                                                        })
+                                                    }
+                                                />
                                                 <Tooltip
                                                     formatter={(value: number) =>
                                                         formatMoney(value)

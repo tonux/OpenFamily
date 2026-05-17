@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, Button, Dialog, Input, Select, Textarea, Tabs } from '../components/ui';
 import { NutritionAnalysisDialog } from '../components/app/NutritionAnalysisDialog';
+import { LunchboxAiDialog, type LunchboxIdea } from '../components/app/LunchboxAiDialog';
 import {
     format,
     startOfWeek,
@@ -91,6 +92,7 @@ const MealPlanning: React.FC = () => {
     // form shapes diverge enough that a single form would be confusing.
     const [householdOpen, setHouseholdOpen] = useState(false);
     const [lunchboxOpen, setLunchboxOpen] = useState(false);
+    const [lunchboxAiOpen, setLunchboxAiOpen] = useState(false);
     const [editingMeal, setEditingMeal] = useState<MealPlan | null>(null);
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [householdForm, setHouseholdForm] = useState(DEFAULT_HOUSEHOLD_FORM);
@@ -215,6 +217,25 @@ const MealPlanning: React.FC = () => {
         });
         setError('');
         setLunchboxOpen(true);
+    };
+
+    // Pre-fills the lunchbox form from an AI-generated idea. Reasoning +
+    // warnings are appended to notes so the parent keeps them handy when
+    // preparing the box.
+    const applyLunchboxIdea = (idea: LunchboxIdea) => {
+        const noteParts: string[] = [];
+        if (lunchboxForm.notes.trim()) noteParts.push(lunchboxForm.notes.trim());
+        if (idea.reasoning) noteParts.push(`IA — ${idea.reasoning}`);
+        for (const w of idea.warnings) noteParts.push(`⚠️ ${w}`);
+        setLunchboxForm((prev) => ({
+            ...prev,
+            main: idea.main || prev.main,
+            fruit: idea.fruit || prev.fruit,
+            snack: idea.snack || prev.snack,
+            drink: idea.drink || prev.drink,
+            notes: noteParts.join('\n'),
+        }));
+        setLunchboxAiOpen(false);
     };
 
     const handleLunchboxSubmit = async (e: React.FormEvent) => {
@@ -710,6 +731,21 @@ const MealPlanning: React.FC = () => {
                             options={familyMembers.map((m) => ({ value: m.id, label: m.name }))}
                         />
                     </div>
+                    <div className="flex items-center justify-between gap-3 rounded-input border border-dashed border-primary/40 bg-primary/5 px-3 py-2">
+                        <p className="text-label-sm text-muted-foreground">
+                            Plus d'idée ? Génère une suggestion à partir de ce que tu as à la
+                            maison.
+                        </p>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setLunchboxAiOpen(true)}
+                        >
+                            <Sparkles className="w-4 h-4 mr-1.5" />
+                            Suggérer
+                        </Button>
+                    </div>
                     <Input
                         label="Plat principal"
                         value={lunchboxForm.main}
@@ -761,6 +797,15 @@ const MealPlanning: React.FC = () => {
                     </div>
                 </form>
             </Dialog>
+
+            <LunchboxAiDialog
+                open={lunchboxAiOpen}
+                onOpenChange={setLunchboxAiOpen}
+                familyMember={
+                    familyMembers.find((m) => m.id === lunchboxForm.family_member_id) ?? null
+                }
+                onIdeaApplied={applyLunchboxIdea}
+            />
         </div>
     );
 };

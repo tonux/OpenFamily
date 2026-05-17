@@ -316,6 +316,10 @@ export type ContactPatch = z.infer<typeof contactPatchSchema>;
 
 // ---------- Rooms (Phase 4) ----------
 
+// Suggested categories surfaced in the UI as autocomplete. The DB column is
+// free-form VARCHAR(32) and the API only enforces length, so users can type
+// any custom category ("Grenier nord", "Cabane jardin"…) when the suggestion
+// list doesn't fit their layout.
 export const ROOM_CATEGORIES = [
     'Salon',
     'Cuisine',
@@ -337,7 +341,10 @@ export const ROOM_CATEGORIES = [
     'Entrée',
     'Autre',
 ] as const;
-export type RoomCategory = (typeof ROOM_CATEGORIES)[number];
+export type RoomCategory = string;
+
+// Free-form, length-bounded to match the VARCHAR(32) DB column.
+const roomCategory = z.string().trim().min(1, 'category is required').max(32);
 
 const hexColor = z
     .string()
@@ -347,7 +354,7 @@ const hexColor = z
 export const roomBodySchema = z
     .object({
         name: z.string().trim().min(1).max(80),
-        category: z.enum(ROOM_CATEGORIES),
+        category: roomCategory,
         color: hexColor.optional(),
         notes: optionalString(2000),
     })
@@ -356,7 +363,7 @@ export const roomBodySchema = z
 export const roomPatchSchema = z
     .object({
         name: z.string().trim().min(1).max(80).optional(),
-        category: z.enum(ROOM_CATEGORIES).optional(),
+        category: roomCategory.optional(),
         color: hexColor.optional(),
         notes: optionalString(2000).optional(),
     })

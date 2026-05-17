@@ -19,7 +19,7 @@ Send a private report with the following information:
 - Impact assessment
 - Proposed mitigation (if available)
 
-Contact: contact@nexaflow.fr
+Contact: contact@tonuxcorp.dev.fr
 
 If email is unavailable, open a GitHub issue with no exploit details and ask for a private contact channel.
 

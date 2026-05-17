@@ -1,6 +1,6 @@
 # KeurTonux
 
-KeurTonux est une application de gestion familiale complète proposée en open source par NexaFlow, conçue pour être auto-hébergée. Gardez le contrôle total de vos données en hébergeant l'application sur votre propre serveur. Gérez vos courses, tâches, rendez-vous, recettes, planning des repas et budget familial en toute sécurité, accessible depuis tous vos appareils.
+KeurTonux est une application de gestion familiale complète proposée en open source par tonuxcorp.dev, conçue pour être auto-hébergée. Gardez le contrôle total de vos données en hébergeant l'application sur votre propre serveur. Gérez vos courses, tâches, rendez-vous, recettes, planning des repas et budget familial en toute sécurité, accessible depuis tous vos appareils.
 
 ## 🎯 Fonctionnalités
 
@@ -202,5 +202,5 @@ GNU Affero General Public License v3.0 (AGPL-3.0-only) - Voir le fichier licence
 
 ## 🙏 Crédits
 
-Basé sur le projet [KeurTonux](https://github.com/NexaFlowFrance/KeurTonux) inititié par NexaFlow France.
+Basé sur le projet [KeurTonux](https://github.com/tonuxcorp.devFrance/KeurTonux) inititié par tonuxcorp.dev France.
 Ce projet respecte la philosophie open source et encourage le partage et la contribution communautaire.

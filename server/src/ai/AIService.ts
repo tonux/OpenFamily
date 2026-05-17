@@ -47,6 +47,11 @@ import {
     buildNutritionWeeklyUserPrompt,
     nutritionWeeklySystemPrompt,
 } from './prompts/nutritionPrompts';
+import {
+    type LunchboxGenerationInput,
+    buildLunchboxGenerationUserPrompt,
+    lunchboxGenerationSystemPrompt,
+} from './prompts/lunchboxPrompts';
 import type { WeatherSummary } from '../weather/WeatherService';
 
 let cachedProvider: BaseProvider | null = null;
@@ -776,6 +781,123 @@ export const analyzeWeeklyMeals = async (
 
 /** Re-export so routes can build the input shape with proper types. */
 export type { NutritionAnalysisInput, PlannedMealLine } from './prompts/nutritionPrompts';
+
+// ---------------------------------------------------------------------------
+// Lunchbox idea generation (MealPlanning page)
+// ---------------------------------------------------------------------------
+
+export interface LunchboxIdea {
+    main: string;
+    fruit: string;
+    snack: string;
+    drink: string;
+    reasoning: string;
+    warnings: string[];
+}
+
+export interface GenerateLunchboxIdeasResult {
+    ideas: LunchboxIdea[];
+    cached: boolean;
+    model: string;
+}
+
+const sanitizeLunchboxIdea = (raw: unknown): LunchboxIdea | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const trim = (v: unknown, max: number): string =>
+        typeof v === 'string' ? v.trim().slice(0, max) : '';
+
+    const main = trim(r.main, 100);
+    const fruit = trim(r.fruit, 80);
+    const snack = trim(r.snack, 80);
+    const drink = trim(r.drink, 60);
+    const reasoning = trim(r.reasoning, 160);
+
+    // An idea is only useful if it fills at least one of the four core slots —
+    // otherwise the form has nothing to pre-fill and the user wasted a call.
+    if (!main && !fruit && !snack && !drink) return null;
+
+    return {
+        main,
+        fruit,
+        snack,
+        drink,
+        reasoning,
+        warnings: stringArray(r.warnings, 2),
+    };
+};
+
+/**
+ * Generate up to 3 lunchbox ideas from on-hand items + child profile + the
+ * eating location. The output mirrors the lunchbox form so the UI can
+ * one-click pre-fill any of the three suggestions.
+ *
+ * No cache: the same household will iterate (the fridge changes each day) and
+ * the input combines too many small lists to make a reusable cache key worth
+ * the complexity. The heavy model is overkill — default model is plenty for a
+ * 4-slot proposal.
+ */
+export const generateLunchboxIdeas = async (
+    input: LunchboxGenerationInput,
+    ctx: { userId: string },
+): Promise<GenerateLunchboxIdeasResult> => {
+    if (input.count < 1 || input.count > 3) {
+        throw new AiError('BAD_REQUEST', 'count must be 1, 2 or 3');
+    }
+
+    const hasAny =
+        (input.availableMains?.length ?? 0) +
+            (input.availableFruits?.length ?? 0) +
+            (input.availableSnacks?.length ?? 0) +
+            (input.availableDrinks?.length ?? 0) >
+        0;
+    if (!hasAny) {
+        throw new AiError(
+            'BAD_REQUEST',
+            'Liste au moins un aliment disponible (fruit, snack, plat ou boisson).',
+        );
+    }
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: lunchboxGenerationSystemPrompt },
+                { role: 'user', content: buildLunchboxGenerationUserPrompt(input) },
+            ],
+            temperature: 0.6,
+            // ~180 tokens per idea with margin for warnings + reasoning.
+            maxTokens: 220 * input.count + 120,
+            jsonMode: true,
+        },
+        { userId: ctx.userId, feature: 'meals.lunchbox_generate' },
+    );
+
+    const parsed = safeParseJson(response.content);
+    const rawList = (parsed as { ideas?: unknown } | null)?.ideas;
+    if (!Array.isArray(rawList)) {
+        throw new AiError('BAD_JSON', 'Model did not return an "ideas" array');
+    }
+
+    const ideas: LunchboxIdea[] = [];
+    for (const raw of rawList) {
+        const sanitized = sanitizeLunchboxIdea(raw);
+        if (sanitized) ideas.push(sanitized);
+        if (ideas.length >= input.count) break;
+    }
+
+    if (ideas.length === 0) {
+        throw new AiError('BAD_JSON', 'Model did not return any usable lunchbox idea');
+    }
+
+    return { ideas, cached: false, model: response.model };
+};
+
+/** Re-export so routes can build the input shape with proper types. */
+export type {
+    LunchboxGenerationInput,
+    LunchboxLocation,
+    LunchboxMemberInput,
+} from './prompts/lunchboxPrompts';
 
 /** Exposed for tests that swap in a mock provider. */
 export const setAiProviderForTests = (provider: BaseProvider | null): void => {
