@@ -50,13 +50,17 @@ services:
       AUTH_RATE_LIMIT_WINDOW_MS: ${AUTH_RATE_LIMIT_WINDOW_MS:-900000}
       AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-10}
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
-      # IA NVIDIA (PR #16-17)
+      # IA — sélection du provider (nvidia par défaut, gemini disponible).
+      # Fournir la clé du provider choisi ; les autres champs ont un défaut.
       AI_ENABLED: ${AI_ENABLED:-true}
-      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
+      AI_PROVIDER: ${AI_PROVIDER:-nvidia}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
       NVIDIA_API_BASE_URL: ${NVIDIA_API_BASE_URL:-https://integrate.api.nvidia.com/v1}
-      AI_MODEL_DEFAULT: ${AI_MODEL_DEFAULT:-meta/llama-3.1-8b-instruct}
-      AI_MODEL_HEAVY: ${AI_MODEL_HEAVY:-meta/llama-3.3-70b-instruct}
-      AI_MODEL_VISION: ${AI_MODEL_VISION:-meta/llama-3.2-90b-vision-instruct}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_API_BASE_URL: ${GEMINI_API_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      AI_MODEL_DEFAULT: ${AI_MODEL_DEFAULT:-}
+      AI_MODEL_HEAVY: ${AI_MODEL_HEAVY:-}
+      AI_MODEL_VISION: ${AI_MODEL_VISION:-}
       AI_MONTHLY_TOKEN_LIMIT_PER_USER: ${AI_MONTHLY_TOKEN_LIMIT_PER_USER:-2000000}
       AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-30000}
       AI_STREAMING_ENABLED: ${AI_STREAMING_ENABLED:-true}
