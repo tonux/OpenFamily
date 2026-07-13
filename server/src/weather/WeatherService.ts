@@ -96,7 +96,8 @@ interface CacheEntry {
 }
 const forecastCache = new Map<string, CacheEntry>();
 
-const cacheKey = (lat: number, lon: number): string => `${lat.toFixed(2)},${lon.toFixed(2)}`;
+const cacheKey = (lat: number, lon: number, offset: number): string =>
+    `${lat.toFixed(2)},${lon.toFixed(2)}:+${offset}`;
 
 const fetchJsonWithTimeout = async (url: string, timeoutMs: number): Promise<unknown> => {
     let res: Response;
@@ -189,19 +190,27 @@ export const geocodeCity = async (rawName: string): Promise<GeocodedCity> => {
 };
 
 /**
- * Fetch tomorrow's daily forecast for the given coordinates. Cached briefly
- * in-process to spare Open-Meteo from a thundering herd at dashboard load.
+ * Fetch the daily forecast for today (`dayOffset = 0`) or tomorrow
+ * (`dayOffset = 1`) at the given coordinates. Cached briefly in-process to
+ * spare Open-Meteo from a thundering herd at dashboard load.
+ *
+ * Both days come back in a single Open-Meteo response (`forecast_days=2`), so
+ * the offset only selects which row we read — it costs no extra round-trip.
+ * The dashboard needs both: during term it looks at tomorrow (lay out the
+ * outfit tonight), during the holidays at today (what do we do this morning?).
+ * See `resolveTargetDay` in ../lib/dayContext.
  */
-export const getTomorrowForecast = async (
+export const getForecastForOffset = async (
     latitude: number,
     longitude: number,
+    dayOffset: 0 | 1,
 ): Promise<TomorrowForecast> => {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
         throw new WeatherError('BAD_REQUEST', 'latitude and longitude must be finite numbers');
     }
 
     const cfg = getWeatherConfig();
-    const key = cacheKey(latitude, longitude);
+    const key = cacheKey(latitude, longitude, dayOffset);
     const now = Date.now();
     const hit = forecastCache.get(key);
     if (hit && hit.expiresAt > now) {
@@ -240,7 +249,7 @@ export const getTomorrowForecast = async (
     } | null;
 
     const daily = data?.daily;
-    const idx = 1; // [today, tomorrow] — we want tomorrow
+    const idx = dayOffset; // response rows are [today, tomorrow]
     if (
         !daily ||
         !Array.isArray(daily.time) ||
@@ -282,6 +291,12 @@ export const getTomorrowForecast = async (
 
     return forecast;
 };
+
+/** Tomorrow's forecast. Kept for callers that never need today. */
+export const getTomorrowForecast = (
+    latitude: number,
+    longitude: number,
+): Promise<TomorrowForecast> => getForecastForOffset(latitude, longitude, 1);
 
 // ---------------------------------------------------------------------------
 // Weekly forecast — used by the dashboard "weather details" modal. Carries

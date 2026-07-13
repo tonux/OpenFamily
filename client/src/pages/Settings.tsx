@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { SUPPORTED_CURRENCIES, DEFAULT_CURRENCY } from '../lib/currencies';
 import { SUPPORTED_LANGUAGES } from '../i18n';
 import { useUpdateUserLocation } from '../hooks/useDashboardWeather';
+import SchoolBreaksCard from '../components/app/SchoolBreaksCard';
 
 const currencyOptions = SUPPORTED_CURRENCIES.map((c) => ({
     value: c.code,
@@ -408,6 +409,10 @@ const Settings: React.FC = () => {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* School breaks — sits next to Location because both feed the
+                dashboard's day context (which day, what weather, school or not). */}
+            <SchoolBreaksCard />
 
             {/* Email notifications */}
             <Card>

@@ -41,6 +41,25 @@ export const clothingSuggestionsBodySchema = z
 
 export type ClothingSuggestionsBody = z.infer<typeof clothingSuggestionsBodySchema>;
 
+// Screen-free activity suggestions for a day the kids spend at home. Same
+// coordinate-override semantics as the clothing widget, plus `exclude`: the
+// titles already shown, so the "regenerate" button can ask for something else.
+export const kidsActivitiesBodySchema = z
+    .object({
+        latitude: z.number().min(-90).max(90).optional(),
+        longitude: z.number().min(-180).max(180).optional(),
+        exclude: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+    })
+    .strict()
+    .refine(
+        (v) =>
+            (v.latitude === undefined && v.longitude === undefined) ||
+            (v.latitude !== undefined && v.longitude !== undefined),
+        { message: 'latitude and longitude must be provided together' },
+    );
+
+export type KidsActivitiesBody = z.infer<typeof kidsActivitiesBodySchema>;
+
 // Recipe generator. The route resolves familyMemberIds against the user's
 // own family (allergies + dietary_preferences are merged into the prompt
 // server-side), so the client never has to sniff that data itself.

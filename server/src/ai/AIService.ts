@@ -34,10 +34,21 @@ import {
     parseShoppingNaturalLanguageSystemPrompt,
 } from './prompts/shoppingPrompts';
 import {
+    type ClothingDayMode,
     type ClothingKidInput,
+    buildClothingSystemPrompt,
     buildClothingUserPrompt,
-    clothingSuggestionsSystemPrompt,
 } from './prompts/clothingPrompts';
+import {
+    ACTIVITY_CATEGORIES,
+    ACTIVITY_TIMES_OF_DAY,
+    type ActivityCategory,
+    type ActivityKidInput,
+    type ActivityTimeOfDay,
+    type FamilyDayContext,
+    buildKidsActivitiesUserPrompt,
+    kidsActivitiesSystemPrompt,
+} from './prompts/activityPrompts';
 import {
     type RecipeGenerationInput,
     buildRecipeGenerationUserPrompt,
@@ -532,8 +543,13 @@ const ageBucket = (years: number): string => {
     return '15+';
 };
 
-const clothingCacheKey = (weather: WeatherSummary, kids: ClothingKidInput[]): string =>
+const clothingCacheKey = (
+    weather: WeatherSummary,
+    kids: ClothingKidInput[],
+    mode: ClothingDayMode,
+): string =>
     [
+        mode,
         weather.tempMinBucket,
         weather.precipBucket,
         weather.windyBucket,
@@ -568,24 +584,27 @@ const sanitizeSuggestion = (raw: unknown, fallbackKidId: string): ClothingSugges
 };
 
 /**
- * Generate a per-kid clothing suggestion for tomorrow morning. The AI sees
- * a bucketed weather summary plus each kid's age and (private to the request)
+ * Generate a per-kid clothing suggestion for the target day. The AI sees a
+ * bucketed weather summary plus each kid's age and (private to the request)
  * id; it returns one suggestion per kid in the same order.
  *
- * Caches by (weather buckets × age buckets) for 30 minutes. On a hit we
+ * `mode` says whether the day is a school day or a day at home — same weather,
+ * different outfit — and is part of the cache key so the two never mix.
+ *
+ * Caches by (mode × weather buckets × age buckets) for 30 minutes. On a hit we
  * remap the cached template to the current kidIds so the response always
  * lines up with what the caller passed in.
  */
 export const suggestClothingForKids = async (
     weather: WeatherSummary,
     kids: ClothingKidInput[],
-    ctx: { userId: string },
+    ctx: { userId: string; mode: ClothingDayMode },
 ): Promise<ClothingSuggestionsResult> => {
     if (kids.length === 0) {
         return { suggestions: [], cached: false, model: '' };
     }
 
-    const key = clothingCacheKey(weather, kids);
+    const key = clothingCacheKey(weather, kids, ctx.mode);
     const now = Date.now();
     const hit = clothingCache.get(key);
     if (hit && now - hit.at < CLOTHING_CACHE_TTL_MS && hit.template.length === kids.length) {
@@ -605,7 +624,7 @@ export const suggestClothingForKids = async (
     const response = await AIService.chat(
         {
             messages: [
-                { role: 'system', content: clothingSuggestionsSystemPrompt },
+                { role: 'system', content: buildClothingSystemPrompt(ctx.mode) },
                 { role: 'user', content: buildClothingUserPrompt(weather, kids) },
             ],
             temperature: 0.4,
@@ -655,6 +674,195 @@ export const suggestClothingForKids = async (
 /** Test helper: clears the in-memory clothing-suggestion cache. */
 export const _resetClothingCache = (): void => {
     clothingCache.clear();
+};
+
+// ---------------------------------------------------------------------------
+// Screen-free activity suggestions for kids at home (holidays & weekends)
+// ---------------------------------------------------------------------------
+
+export interface KidActivity {
+    kidIds: string[];
+    title: string;
+    category: ActivityCategory;
+    timeOfDay: ActivityTimeOfDay;
+    durationMinutes: number;
+    materials: string[];
+    instructions: string;
+}
+
+export interface KidActivitiesResult {
+    activities: KidActivity[];
+    cached: boolean;
+    model: string;
+}
+
+const ACTIVITY_CACHE_TTL_MS = 15 * 60_000;
+const MAX_ACTIVITIES = 5;
+
+interface ActivityCacheEntry {
+    at: number;
+    activities: KidActivity[];
+    model: string;
+}
+
+/**
+ * Cached per (day × weather × age buckets × exclusions).
+ *
+ * The date is in the key on purpose: unlike an outfit, a list of activities
+ * that never changes is worse than useless — the family stops looking. A new
+ * day means new ideas. The 15-minute TTL only exists to absorb dashboard
+ * re-renders and refetches within a single sitting.
+ */
+const activityCache = new Map<string, ActivityCacheEntry>();
+
+const activityCacheKey = (
+    dateKey: string,
+    weather: WeatherSummary,
+    kids: ActivityKidInput[],
+    exclude: string[],
+): string =>
+    [
+        dateKey,
+        weather.tempMinBucket,
+        weather.precipBucket,
+        weather.windyBucket,
+        kids.map((k) => ageBucket(k.ageYears)).join(','),
+        // Sorted so "regenerate" twice with the same exclusions still hits.
+        [...exclude].sort().join('~'),
+    ].join('|');
+
+const ACTIVITY_CATEGORY_SET = new Set<string>(ACTIVITY_CATEGORIES);
+const ACTIVITY_TIME_SET = new Set<string>(ACTIVITY_TIMES_OF_DAY);
+
+const sanitizeKidActivity = (raw: unknown, validKidIds: Set<string>): KidActivity | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const title = typeof r.title === 'string' ? r.title.trim().slice(0, 80) : '';
+    if (!title) return null;
+
+    // Only keep ids we actually sent — the model sometimes invents one.
+    const kidIds = stringArray(r.kidIds, 10).filter((id) => validKidIds.has(id));
+    if (kidIds.length === 0) return null;
+
+    const category =
+        typeof r.category === 'string' && ACTIVITY_CATEGORY_SET.has(r.category)
+            ? (r.category as ActivityCategory)
+            : 'creative';
+    const timeOfDay =
+        typeof r.timeOfDay === 'string' && ACTIVITY_TIME_SET.has(r.timeOfDay)
+            ? (r.timeOfDay as ActivityTimeOfDay)
+            : 'afternoon';
+
+    const rawDuration = typeof r.durationMinutes === 'number' ? r.durationMinutes : 45;
+    const durationMinutes = Math.max(15, Math.min(180, Math.round(rawDuration)));
+
+    return {
+        kidIds,
+        title,
+        category,
+        timeOfDay,
+        durationMinutes,
+        materials: stringArray(r.materials, 5),
+        instructions: typeof r.instructions === 'string' ? r.instructions.trim().slice(0, 240) : '',
+    };
+};
+
+const TIME_OF_DAY_ORDER: Record<ActivityTimeOfDay, number> = {
+    morning: 0,
+    afternoon: 1,
+    evening: 2,
+};
+
+/**
+ * Propose screen-free activities for a day the kids spend at home.
+ *
+ * The prompt carries a digest of what the app already knows about that day
+ * (garden, meals, chores, busy slots), which is what separates this from
+ * asking a chatbot for "activity ideas": the suggestions land on the family's
+ * actual day.
+ *
+ * Throws AiError (DISABLED / QUOTA_EXCEEDED / BAD_JSON …) — the route catches
+ * those and falls back to the static bank rather than showing an empty card.
+ */
+export const suggestActivitiesForKids = async (
+    weather: WeatherSummary,
+    kids: ActivityKidInput[],
+    context: FamilyDayContext,
+    ctx: { userId: string; dateKey: string; exclude?: string[] },
+): Promise<KidActivitiesResult> => {
+    if (kids.length === 0) {
+        return { activities: [], cached: false, model: '' };
+    }
+
+    const exclude = ctx.exclude ?? [];
+    const key = activityCacheKey(ctx.dateKey, weather, kids, exclude);
+    const now = Date.now();
+    const hit = activityCache.get(key);
+    if (hit && now - hit.at < ACTIVITY_CACHE_TTL_MS) {
+        await recordInteraction({
+            userId: ctx.userId,
+            feature: 'dashboard.kids_activities',
+            model: hit.model,
+            promptTokens: 0,
+            completionTokens: 0,
+            latencyMs: null,
+            status: 'cached',
+        });
+        return { activities: hit.activities, cached: true, model: hit.model };
+    }
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: kidsActivitiesSystemPrompt },
+                {
+                    role: 'user',
+                    content: buildKidsActivitiesUserPrompt(weather, kids, context, exclude),
+                },
+            ],
+            // Warmer than the clothing prompt: repeating the same four ideas all
+            // summer is the failure mode that kills this feature.
+            temperature: 0.8,
+            maxTokens: 900,
+            jsonMode: true,
+        },
+        { userId: ctx.userId, feature: 'dashboard.kids_activities' },
+    );
+
+    const parsed = safeParseJson(response.content);
+    const rawList = (parsed as { activities?: unknown } | null)?.activities;
+    if (!Array.isArray(rawList)) {
+        throw new AiError('BAD_JSON', 'Model did not return an "activities" array');
+    }
+
+    const validKidIds = new Set(kids.map((k) => k.id));
+    const activities: KidActivity[] = [];
+    const seenTitles = new Set<string>();
+    for (const raw of rawList) {
+        if (activities.length >= MAX_ACTIVITIES) break;
+        const sanitized = sanitizeKidActivity(raw, validKidIds);
+        if (!sanitized) continue;
+        const dedupeKey = sanitized.title.toLowerCase();
+        if (seenTitles.has(dedupeKey)) continue;
+        seenTitles.add(dedupeKey);
+        activities.push(sanitized);
+    }
+
+    if (activities.length === 0) {
+        throw new AiError('BAD_JSON', 'Model returned no usable activity');
+    }
+
+    activities.sort((a, b) => TIME_OF_DAY_ORDER[a.timeOfDay] - TIME_OF_DAY_ORDER[b.timeOfDay]);
+
+    activityCache.set(key, { at: now, activities, model: response.model });
+
+    return { activities, cached: false, model: response.model };
+};
+
+/** Test helper: clears the in-memory activity-suggestion cache. */
+export const _resetActivityCache = (): void => {
+    activityCache.clear();
 };
 
 // ---------------------------------------------------------------------------

@@ -21,6 +21,7 @@ import { Button } from '../components/ui/Button';
 import { useNavigate } from 'react-router-dom';
 import { useCurrency } from '../lib/useCurrency';
 import WeatherClothingCard from '../components/app/WeatherClothingCard';
+import KidsActivitiesCard from '../components/app/KidsActivitiesCard';
 import HouseAlertsCard from '../components/app/HouseAlertsCard';
 import TodayTasksCard from '../components/app/TodayTasksCard';
 
@@ -413,6 +414,9 @@ const Dashboard: React.FC = () => {
             <TodayTasksCard />
 
             <WeatherClothingCard />
+
+            {/* Renders itself to null on a school day — see dayContext.mode. */}
+            <KidsActivitiesCard />
 
             <HouseAlertsCard />
 

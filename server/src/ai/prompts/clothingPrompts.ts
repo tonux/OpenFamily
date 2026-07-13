@@ -23,7 +23,21 @@ export interface ClothingKidInput {
     ageYears: number;
 }
 
-export const clothingSuggestionsSystemPrompt = `Tu suggères une tenue pour un enfant qui va à l'école demain, en fonction de la météo et de son âge.
+/**
+ * Whether the kid spends the day at school or at home. Drives the first line of
+ * the system prompt: a school outfit and a holiday outfit are not the same
+ * brief (one has a dress code and a playground, the other has a garden, a park
+ * and mud).
+ */
+export type ClothingDayMode = 'school' | 'home';
+
+const DAY_MODE_INTRO: Record<ClothingDayMode, string> = {
+    school: "Tu suggères une tenue pour un enfant qui va à l'école, en fonction de la météo et de son âge.",
+    home: 'Tu suggères une tenue pour un enfant qui passe la journée à la maison et dehors (vacances ou week-end) : il va jouer, bouger et se salir. Privilégie le confort et les vêtements qui ne craignent rien.',
+};
+
+export const buildClothingSystemPrompt = (mode: ClothingDayMode): string =>
+    `${DAY_MODE_INTRO[mode]}
 Réponds UNIQUEMENT par un objet JSON valide, sans texte avant ni après.
 Schéma attendu :
 {
@@ -45,13 +59,16 @@ Règles :
 - Une suggestion par enfant, dans l'ordre exact fourni.
 - Le champ "kidId" doit reprendre la valeur fournie pour chaque enfant.`;
 
+/** Kept for callers that still assume a school day. */
+export const clothingSuggestionsSystemPrompt = buildClothingSystemPrompt('school');
+
 export const buildClothingUserPrompt = (
     weather: WeatherSummary,
     kids: ClothingKidInput[],
 ): string => {
     const lines: string[] = [];
     lines.push(
-        `Météo de demain : min ${Math.round(weather.tempMin)}°C, max ${Math.round(weather.tempMax)}°C, ${weather.label}, précipitations ${weather.precipBucket}, vent ${weather.windyBucket}.`,
+        `Météo : min ${Math.round(weather.tempMin)}°C, max ${Math.round(weather.tempMax)}°C, ${weather.label}, précipitations ${weather.precipBucket}, vent ${weather.windyBucket}.`,
     );
     lines.push('Enfants :');
     for (const kid of kids) {

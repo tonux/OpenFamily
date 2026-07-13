@@ -28,6 +28,7 @@ import {
     type ForecastDTO,
 } from '../../hooks/useDashboardWeather';
 import WeatherDetailsDialog from './WeatherDetailsDialog';
+import { dayContextHeading, isTodayContext } from '../../lib/dayContextLabel';
 
 // =============================================================================
 // WeatherClothingCard
@@ -208,7 +209,7 @@ const WeatherClothingCard: React.FC = () => {
                     <div>
                         <h2 className="text-h2 font-semibold flex items-center gap-2">
                             <Sparkles className="h-5 w-5 text-primary" />
-                            {t('weatherClothing.tomorrowSchool')}
+                            {dayContextHeading(data.dayContext, t)}
                         </h2>
                         <p className="text-micro text-muted-foreground flex items-center gap-1">
                             <MapPin className="h-3.5 w-3.5" />
@@ -244,7 +245,11 @@ const WeatherClothingCard: React.FC = () => {
 
                 {/* Body */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <WeatherTile forecast={data.weather} onClick={() => setDetailsOpen(true)} />
+                    <WeatherTile
+                        forecast={data.weather}
+                        isToday={isTodayContext(data.dayContext)}
+                        onClick={() => setDetailsOpen(true)}
+                    />
 
                     <div className="lg:col-span-2">
                         {data.kids.length === 0 ? (
@@ -295,10 +300,11 @@ const EmptyShell: React.FC<{
     </Card>
 );
 
-const WeatherTile: React.FC<{ forecast: ForecastDTO; onClick?: () => void }> = ({
-    forecast,
-    onClick,
-}) => {
+const WeatherTile: React.FC<{
+    forecast: ForecastDTO;
+    isToday: boolean;
+    onClick?: () => void;
+}> = ({ forecast, isToday, onClick }) => {
     const { t } = useTranslation();
     const Icon = weatherIconFor(forecast.weatherCode);
     return (
@@ -312,7 +318,7 @@ const WeatherTile: React.FC<{ forecast: ForecastDTO; onClick?: () => void }> = (
             <div className="flex items-start justify-between">
                 <div>
                     <p className="text-label text-muted-foreground flex items-center gap-1">
-                        {t('weatherClothing.tomorrow')}
+                        {isToday ? t('weatherClothing.today') : t('weatherClothing.tomorrow')}
                         {onClick && (
                             <span className="text-[10px] italic text-primary/70">
                                 · {t('weatherClothing.clickForWeek')}

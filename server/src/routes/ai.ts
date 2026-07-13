@@ -7,6 +7,7 @@ import {
     classifyShoppingItem,
     parseShoppingNaturalLanguage,
     suggestClothingForKids,
+    suggestActivitiesForKids,
     generateRecipesFromIngredients,
     analyzeWeeklyMeals,
     generateLunchboxIdeas,
@@ -35,11 +36,15 @@ import {
     generateVacationLuggageBodySchema,
     generateVacationPlanBodySchema,
     generateGardeningTipsBodySchema,
+    kidsActivitiesBodySchema,
     parseShoppingNLBodySchema,
 } from '../schemas/ai';
 import { query } from '../db';
-import { getTomorrowForecast, summarize } from '../weather/WeatherService';
+import { getForecastForOffset, summarize } from '../weather/WeatherService';
 import { WeatherError } from '../weather/errors';
+import { resolveTargetDay } from '../lib/dayContext';
+import { pickFallbackActivities } from '../ai/fallbacks/activityBank';
+import type { FamilyDayContext } from '../ai/prompts/activityPrompts';
 import logger from '../lib/logger';
 
 const router = Router();
@@ -151,21 +156,15 @@ router.post(
     },
 );
 
-/**
- * POST /api/ai/dashboard/clothing-suggestions
- * Body: { latitude?: number, longitude?: number }   (override coords)
- *
- * Aggregates tomorrow's forecast for the user's saved (or overridden) city,
- * the list of children, and an AI-generated clothing suggestion per child.
- *
- * Degraded paths return 200 with a typed `code` so the widget can render a
- * partial state without an error banner:
- *   - NO_LOCATION   → user has no city saved and no override sent
- *   - DISABLED      → AI feature toggle off; weather + kids still returned
- *   - QUOTA_EXCEEDED→ same
- *   - BAD_JSON      → model returned garbage; weather + kids still returned
- * Hard failures (weather provider down, etc.) bubble through `sendAiError`.
- */
+// ---------------------------------------------------------------------------
+// Dashboard widgets (weather + outfit, screen-free activities)
+//
+// Both widgets answer the same two questions first: WHICH day are we talking
+// about, and what's the weather then? `resolveTargetDay` decides — tomorrow
+// during term (lay out the outfit tonight), today during the holidays (what do
+// we DO this morning?) — so the helpers below are shared by both routes.
+// ---------------------------------------------------------------------------
+
 const ageYearsFromBirthDate = (birthDate: unknown, fallback: number): number => {
     if (!(birthDate instanceof Date) && typeof birthDate !== 'string') return fallback;
     const d = birthDate instanceof Date ? birthDate : new Date(`${birthDate}T00:00:00`);
@@ -179,48 +178,113 @@ const ageYearsFromBirthDate = (birthDate: unknown, fallback: number): number => 
     return Math.max(0, Math.min(120, age));
 };
 
+interface ResolvedCoords {
+    latitude: number;
+    longitude: number;
+    city: string | null;
+}
+
+/** Override coords from the body win over the user's saved city. */
+const resolveCoordinates = async (req: AuthRequest): Promise<ResolvedCoords | null> => {
+    const bodyLat = typeof req.body.latitude === 'number' ? req.body.latitude : null;
+    const bodyLon = typeof req.body.longitude === 'number' ? req.body.longitude : null;
+    if (bodyLat !== null && bodyLon !== null) {
+        return { latitude: bodyLat, longitude: bodyLon, city: null };
+    }
+
+    const userRow = await query('SELECT city, latitude, longitude FROM users WHERE id = $1', [
+        req.userId,
+    ]);
+    const u = userRow.rows[0] as
+        | {
+              city: string | null;
+              latitude: string | number | null;
+              longitude: string | number | null;
+          }
+        | undefined;
+
+    if (!u || u.latitude === null || u.longitude === null) return null;
+    return {
+        latitude: Number(u.latitude),
+        longitude: Number(u.longitude),
+        city: u.city ?? null,
+    };
+};
+
+interface DashboardKid {
+    id: string;
+    name: string;
+    color: string;
+    birth_date: string | null;
+    ageYears: number;
+}
+
+const loadKids = async (userId: string): Promise<DashboardKid[]> => {
+    const result = await query(
+        `SELECT id, name, birth_date, color
+         FROM family_members
+         WHERE user_id = $1 AND role = 'Enfant'
+         ORDER BY birth_date NULLS LAST, name ASC`,
+        [userId],
+    );
+    return result.rows.map((r: any) => ({
+        id: r.id as string,
+        name: r.name as string,
+        color: r.color as string,
+        birth_date: r.birth_date as string | null,
+        ageYears: ageYearsFromBirthDate(r.birth_date, 8),
+    }));
+};
+
+const firstNameOf = (fullName: string): string => fullName.split(' ')[0] ?? fullName;
+
+const AI_DEGRADED_CODES = new Set(['DISABLED', 'QUOTA_EXCEEDED', 'BAD_JSON']);
+
+/**
+ * Codes the clothing widget can render around: it still has the weather and the
+ * kids, so it drops the outfit pills and says why. A provider outage stays a
+ * hard 5xx there — the card has an error state for it.
+ */
+const isDegradable = (err: unknown): err is AiError =>
+    err instanceof AiError && AI_DEGRADED_CODES.has(err.code);
+
+/**
+ * POST /api/ai/dashboard/clothing-suggestions
+ * Body: { latitude?: number, longitude?: number }   (override coords)
+ *
+ * Aggregates the target day's forecast for the user's saved (or overridden)
+ * city, the list of children, and an AI-generated clothing suggestion per
+ * child. The response carries `dayContext` so the widget can title itself
+ * honestly ("Demain — école" vs "Aujourd'hui — vacances") instead of assuming
+ * a school day the way it used to.
+ *
+ * Degraded paths return 200 with a typed `code` so the widget can render a
+ * partial state without an error banner:
+ *   - NO_LOCATION   → user has no city saved and no override sent
+ *   - DISABLED      → AI feature toggle off; weather + kids still returned
+ *   - QUOTA_EXCEEDED→ same
+ *   - BAD_JSON      → model returned garbage; weather + kids still returned
+ * Hard failures (weather provider down, etc.) bubble through `sendAiError`.
+ */
 router.post(
     '/dashboard/clothing-suggestions',
     validate({ body: clothingSuggestionsBodySchema }),
     async (req: AuthRequest, res) => {
         try {
-            // 1. Resolve coordinates: override > saved.
-            let latitude: number | null =
-                typeof req.body.latitude === 'number' ? req.body.latitude : null;
-            let longitude: number | null =
-                typeof req.body.longitude === 'number' ? req.body.longitude : null;
-            let cityLabel: string | null = null;
-
-            const userRow = await query(
-                'SELECT city, latitude, longitude FROM users WHERE id = $1',
-                [req.userId],
-            );
-            const u = userRow.rows[0] as
-                | {
-                      city: string | null;
-                      latitude: string | number | null;
-                      longitude: string | number | null;
-                  }
-                | undefined;
-
-            if (latitude === null || longitude === null) {
-                if (u && u.latitude !== null && u.longitude !== null) {
-                    latitude = Number(u.latitude);
-                    longitude = Number(u.longitude);
-                    cityLabel = u.city ?? null;
-                } else {
-                    return res.status(400).json({
-                        success: false,
-                        error: { code: 'NO_LOCATION', message: 'No saved location' },
-                    });
-                }
+            const coords = await resolveCoordinates(req);
+            if (!coords) {
+                return res.status(400).json({
+                    success: false,
+                    error: { code: 'NO_LOCATION', message: 'No saved location' },
+                });
             }
 
-            // 2. Forecast.
+            const { context: dayContext, dayOffset } = await resolveTargetDay(req.userId!);
+
             let weather;
             let summary;
             try {
-                weather = await getTomorrowForecast(latitude!, longitude!);
+                weather = await getForecastForOffset(coords.latitude, coords.longitude, dayOffset);
                 summary = summarize(weather);
             } catch (err) {
                 if (err instanceof WeatherError) {
@@ -233,27 +297,8 @@ router.post(
                 throw err;
             }
 
-            // 3. Kids (role='Enfant').
-            const kidsRow = await query(
-                `SELECT id, name, birth_date, color
-                 FROM family_members
-                 WHERE user_id = $1 AND role = 'Enfant'
-                 ORDER BY birth_date NULLS LAST, name ASC`,
-                [req.userId],
-            );
-            const kids = kidsRow.rows.map((r: any) => ({
-                id: r.id as string,
-                name: r.name as string,
-                color: r.color as string,
-                birth_date: r.birth_date as string | null,
-                ageYears: ageYearsFromBirthDate(r.birth_date, 8),
-            }));
-
-            const baseResponse = {
-                weather,
-                city: cityLabel,
-                kids,
-            };
+            const kids = await loadKids(req.userId!);
+            const baseResponse = { weather, city: coords.city, kids, dayContext };
 
             if (kids.length === 0) {
                 return res.json({
@@ -262,16 +307,15 @@ router.post(
                 });
             }
 
-            // 4. AI suggestion. Degrade gracefully on disabled/quota/bad-json.
             try {
                 const ai = await suggestClothingForKids(
                     summary,
                     kids.map((k) => ({
                         id: k.id,
-                        firstName: k.name.split(' ')[0] ?? k.name,
+                        firstName: firstNameOf(k.name),
                         ageYears: k.ageYears,
                     })),
-                    { userId: req.userId! },
+                    { userId: req.userId!, mode: dayContext.mode },
                 );
                 return res.json({
                     success: true,
@@ -283,12 +327,7 @@ router.post(
                     },
                 });
             } catch (err) {
-                if (
-                    err instanceof AiError &&
-                    (err.code === 'DISABLED' ||
-                        err.code === 'QUOTA_EXCEEDED' ||
-                        err.code === 'BAD_JSON')
-                ) {
+                if (isDegradable(err)) {
                     logger.info('ai.clothing.degraded', { code: err.code });
                     return res.json({
                         success: true,
@@ -306,6 +345,203 @@ router.post(
             }
         } catch (error) {
             sendAiError(res, error, 'dashboard_clothing');
+        }
+    },
+);
+
+/**
+ * Gather what the app already knows about `dateKey`, to feed the activity
+ * prompt. This is the difference between "give me activity ideas for a 7 and a
+ * 10 year old" (which any chatbot answers) and a suggestion that knows there
+ * are tomatoes to water, a dessert on tonight's plan, and swimming at 14:00.
+ *
+ * Every list is capped: each line spends tokens the 8B model needs to hold on
+ * to while emitting strict JSON.
+ */
+const loadFamilyDayContext = async (userId: string, dateKey: string): Promise<FamilyDayContext> => {
+    const [slots, appts, plants, meals, chores] = await Promise.all([
+        query(
+            `SELECT title, start_time, end_time
+             FROM schedule_entries
+             WHERE user_id = $1
+               AND schedule_type = 'activity'
+               AND (specific_date = $2 OR (specific_date IS NULL AND day_of_week = $3))
+             ORDER BY start_time ASC
+             LIMIT 3`,
+            [userId, dateKey, isoDayOfWeek(dateKey)],
+        ),
+        query(
+            `SELECT title, start_time
+             FROM appointments
+             WHERE user_id = $1 AND start_time::date = $2
+             ORDER BY start_time ASC
+             LIMIT 3`,
+            [userId, dateKey],
+        ),
+        query(
+            `SELECT name FROM garden_plants WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5`,
+            [userId],
+        ),
+        query(
+            // A meal plan points either at a recipe or at a free-text dish.
+            `SELECT mp.meal_type, COALESCE(r.name, mp.custom_meal) AS dish
+             FROM meal_plans mp
+             LEFT JOIN recipes r ON r.id = mp.recipe_id
+             WHERE mp.user_id = $1
+               AND mp.date = $2
+               AND COALESCE(r.name, mp.custom_meal) IS NOT NULL
+             ORDER BY mp.meal_type ASC
+             LIMIT 3`,
+            [userId, dateKey],
+        ),
+        query(
+            // due_date is a TIMESTAMP — cast before comparing to a date key.
+            `SELECT title FROM tasks
+             WHERE user_id = $1 AND due_date::date = $2 AND is_completed = false
+             ORDER BY priority DESC
+             LIMIT 3`,
+            [userId, dateKey],
+        ),
+    ]);
+
+    const busySlots: string[] = [];
+    for (const r of slots.rows as Array<Record<string, unknown>>) {
+        busySlots.push(`${String(r.title)} ${String(r.start_time).slice(0, 5)}`);
+    }
+    for (const r of appts.rows as Array<Record<string, unknown>>) {
+        busySlots.push(String(r.title));
+    }
+
+    return {
+        busySlots: busySlots.slice(0, 4),
+        gardenPlants: (plants.rows as Array<Record<string, unknown>>).map((r) => String(r.name)),
+        meals: (meals.rows as Array<Record<string, unknown>>).map(
+            (r) => `${String(r.meal_type)} : ${String(r.dish)}`,
+        ),
+        choreTitles: (chores.rows as Array<Record<string, unknown>>).map((r) => String(r.title)),
+    };
+};
+
+/** schedule_entries.day_of_week is ISO: 1 = Monday … 7 = Sunday. */
+const isoDayOfWeek = (dateKey: string): number => {
+    const js = new Date(`${dateKey}T00:00:00`).getDay(); // 0 = Sunday
+    return js === 0 ? 7 : js;
+};
+
+/** Rain, strong wind or cold → keep the suggestions indoors. */
+const outdoorIsPleasant = (summary: {
+    precipBucket: string;
+    windyBucket: string;
+    tempMax: number;
+}) => summary.precipBucket === 'none' && summary.windyBucket !== 'windy' && summary.tempMax >= 12;
+
+/**
+ * POST /api/ai/dashboard/kids-activities
+ * Body: { latitude?, longitude?, exclude?: string[] }
+ *
+ * Screen-free activity suggestions for a day the kids spend at home. The
+ * client only mounts the widget when `dayContext.mode === 'home'`, but the
+ * route stays honest and returns the context either way.
+ *
+ * Unlike the clothing widget, an AI outage does NOT empty this card: it falls
+ * back to a static, age- and weather-filtered bank. A blank "what shall we do
+ * today?" card concedes the day to the screen, which is the one outcome this
+ * feature exists to prevent. `aiUnavailable` still flags the degradation so the
+ * UI can say the ideas are the offline ones.
+ */
+router.post(
+    '/dashboard/kids-activities',
+    validate({ body: kidsActivitiesBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const coords = await resolveCoordinates(req);
+            if (!coords) {
+                return res.status(400).json({
+                    success: false,
+                    error: { code: 'NO_LOCATION', message: 'No saved location' },
+                });
+            }
+
+            const { context: dayContext, dayOffset } = await resolveTargetDay(req.userId!);
+
+            let weather;
+            let summary;
+            try {
+                weather = await getForecastForOffset(coords.latitude, coords.longitude, dayOffset);
+                summary = summarize(weather);
+            } catch (err) {
+                if (err instanceof WeatherError) {
+                    logger.warn('ai.activities.weather_failed', {
+                        code: err.code,
+                        message: err.message,
+                    });
+                    return res.status(err.status).json({ success: false, error: err.toJSON() });
+                }
+                throw err;
+            }
+
+            const kids = await loadKids(req.userId!);
+            const exclude = Array.isArray(req.body.exclude) ? (req.body.exclude as string[]) : [];
+            const baseResponse = { weather, city: coords.city, kids, dayContext };
+
+            if (kids.length === 0) {
+                return res.json({
+                    success: true,
+                    data: { ...baseResponse, activities: [], cached: false, model: '' },
+                });
+            }
+
+            const familyContext = await loadFamilyDayContext(req.userId!, dayContext.date);
+
+            try {
+                const ai = await suggestActivitiesForKids(
+                    summary,
+                    kids.map((k) => ({
+                        id: k.id,
+                        firstName: firstNameOf(k.name),
+                        ageYears: k.ageYears,
+                    })),
+                    familyContext,
+                    { userId: req.userId!, dateKey: dayContext.date, exclude },
+                );
+                return res.json({
+                    success: true,
+                    data: {
+                        ...baseResponse,
+                        activities: ai.activities,
+                        cached: ai.cached,
+                        model: ai.model,
+                    },
+                });
+            } catch (err) {
+                // ANY AI failure degrades here — not just the three "soft" codes
+                // the clothing widget tolerates. A provider outage or a timeout
+                // is the likeliest failure in production, and this is the one
+                // card that must never come back empty: "nothing to do today"
+                // hands the day to the tablet, which is what it exists to stop.
+                if (err instanceof AiError) {
+                    logger.info('ai.activities.degraded', { code: err.code });
+                    return res.json({
+                        success: true,
+                        data: {
+                            ...baseResponse,
+                            activities: pickFallbackActivities({
+                                kids: kids.map((k) => ({ id: k.id, ageYears: k.ageYears })),
+                                outdoorOk: outdoorIsPleasant(summary),
+                                dateKey: dayContext.date,
+                                exclude,
+                            }),
+                            cached: false,
+                            model: '',
+                            aiUnavailable: true,
+                            code: err.code,
+                        },
+                    });
+                }
+                throw err;
+            }
+        } catch (error) {
+            sendAiError(res, error, 'dashboard_kids_activities');
         }
     },
 );

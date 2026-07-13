@@ -72,6 +72,19 @@
         "appointments": "Appointments",
         "schedule_entries": "Schedules"
       }
+    },
+    "schoolBreaks": {
+      "title": "School holidays",
+      "description": "Declare the periods when the kids are home. Without any entry, the app already treats weekends and July–August as holidays.",
+      "emptyHint": "No period declared — weekends and July–August are already handled automatically. Add a period for half-term, Christmas, February… or for precise summer dates.",
+      "labelPlaceholder": "Period name (e.g. Half-term holidays)",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "add": "Add the period",
+      "adding": "Adding…",
+      "delete": "Delete the period",
+      "errorInvertedRange": "The end date must be on or after the start date.",
+      "errorGeneric": "Could not save the period."
     }
   },
   "language": {
