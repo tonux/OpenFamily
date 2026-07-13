@@ -149,6 +149,57 @@ export interface GardenTipsResult {
     model: string;
 }
 
+// ---------- Photo scan (vision) ----------
+// What POST /api/ai/garden/scan-photo proposes from a photo. It is a PROPOSAL:
+// nothing is persisted server-side. GardenScanDialog renders it as an editable
+// form and the user's confirmation is what triggers the regular create calls
+// below. The server has already forced every enum back into the canonical
+// French lists, so these are safe to feed straight into the mutations.
+
+export type GardenScanMode = 'plant' | 'zone';
+
+export interface ScannedZone {
+    name: string;
+    zone_type: GardenZoneType;
+    sun_exposure: GardenSunExposure | null;
+    notes: string;
+}
+
+export interface ScannedPlant {
+    name: string;
+    plant_type: GardenPlantType;
+    variety: string | null;
+    health_status: GardenHealthStatus;
+    watering_frequency_days: number | null;
+}
+
+export interface ScannedCare {
+    care_type: GardenCareType;
+    title: string;
+    /** 0 = today. The dialog turns this into planned_date against the browser clock. */
+    due_in_days: number;
+    recurrence_days: number | null;
+    notes: string | null;
+}
+
+export interface ScannedObservation {
+    notes: string;
+    health_status: GardenHealthStatus | null;
+    height_cm: number | null;
+}
+
+export interface GardenScan {
+    mode: GardenScanMode;
+    /** false when the photo shows nothing identifiable — the dialog offers a retake. */
+    detected: boolean;
+    confidence: 'high' | 'medium' | 'low';
+    zone: ScannedZone | null;
+    plants: ScannedPlant[];
+    care: ScannedCare[];
+    observation: ScannedObservation | null;
+    warnings: string[];
+}
+
 // ---------- Zone queries & mutations ----------
 
 export const useGardenZones = (filters?: { zone_type?: GardenZoneType; q?: string }) =>

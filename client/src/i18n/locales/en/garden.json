@@ -184,6 +184,53 @@
       "warnings": "Things to watch",
       "failed": "Failed to generate tips.",
       "softNotice": "AI tips are temporarily unavailable (service disabled or quota reached). Try again later."
+    },
+    "scan": {
+      "plantCta": "Scan a plant",
+      "zoneCta": "Scan an area",
+      "titlePlant": "Scan a plant",
+      "titleZone": "Scan an area",
+      "descPlant": "Take a photo of a plant: the AI proposes its identification, its health status, the care to schedule and a journal entry.",
+      "descZone": "Take a photo of a garden area: the AI proposes the zone, the plants it recognises, the care to schedule and a journal entry.",
+      "pickPhoto": "Take or choose a photo",
+      "formatsHint": "JPEG, PNG, WEBP or HEIC — 5 MB max",
+      "previewAlt": "Photo preview",
+      "removePhoto": "Remove photo",
+      "analyze": "Analyse photo",
+      "scanning": "Analysing…",
+      "rescan": "Analyse again",
+      "proposalTitle": "AI proposal",
+      "notDetected": "No plant or green space could be identified in this photo. Try again with a sharper or better-framed shot.",
+      "zoneTarget": "Attach to zone",
+      "createProposedZone": "➕ Create the \"{{name}}\" zone",
+      "plantsTitle": "Detected plants",
+      "careTitle": "Care to schedule",
+      "journalTitle": "Add to journal",
+      "journalNeedsTarget": "Select a zone or keep at least one plant so the journal entry has something to attach to.",
+      "includeItem": "Include this item",
+      "reviewHint": "Review and correct before saving: the AI is least reliable on the exact variety. Nothing is created until you confirm.",
+      "confirm": "Create selected items",
+      "saving": "Saving…",
+      "savedToast": "Items created from the photo",
+      "savedSummary": "{{plants}} plant(s), {{care}} care task(s).",
+      "confidence": {
+        "high": "High confidence",
+        "medium": "Medium confidence",
+        "low": "Low confidence"
+      },
+      "errors": {
+        "network": "Cannot reach the server. Check your connection.",
+        "aborted": "Analysis cancelled.",
+        "disabled": "AI is disabled on this server.",
+        "quota_exceeded": "Monthly AI quota reached.",
+        "bad_json": "Unreadable model response. Try again.",
+        "scan_http": "Analysis failed (error {{status}}).",
+        "scan_failed": "Photo analysis failed.",
+        "unsupported_format": "Unsupported format: {{type}}.",
+        "unknown_type": "unknown type",
+        "too_large": "Image too large (max {{size}} MB).",
+        "partial_save": "Something failed while saving: some items were already created. Check your zones, plants and care tasks before retrying."
+      }
     }
   }
 }

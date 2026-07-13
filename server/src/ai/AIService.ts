@@ -81,6 +81,22 @@ import {
     gardeningTipsSystemPrompt,
 } from './prompts/gardeningPrompts';
 import {
+    type GardenScan,
+    type GardenScanInput,
+    type GardenScanMode,
+    type ScannedCare,
+    type ScannedObservation,
+    type ScannedPlant,
+    type ScannedZone,
+    SCAN_CARE_TYPES,
+    SCAN_HEALTH_STATUSES,
+    SCAN_PLANT_TYPES,
+    SCAN_SUN_EXPOSURES,
+    SCAN_ZONE_TYPES,
+    buildGardenScanUserMessage,
+    gardenScanSystemPrompt,
+} from './prompts/gardenScanPrompts';
+import {
     type VacationPlanInput,
     buildVacationPlanUserPrompt,
     vacationPlanSystemPrompt,
@@ -1597,6 +1613,227 @@ export const generateGardeningTips = async (
 
 /** Re-export so routes can build the input shape with proper types. */
 export type { GardeningTipsInput, GardeningPlantInput } from './prompts/gardeningPrompts';
+
+// ---------------------------------------------------------------------------
+// Garden photo scan (vision) — Garden page "Scanner une photo"
+//
+// Returns a PROPOSAL, never a write. Every enum coming back from the model is
+// checked against the canonical French list and dropped (or defaulted) if it
+// doesn't match — a hallucinated care_type would otherwise land in the DB as a
+// value no filter can ever select again.
+// ---------------------------------------------------------------------------
+
+const SCAN_CONFIDENCE_VALID = new Set(['high', 'medium', 'low']);
+const ZONE_TYPE_SET = new Set<string>(SCAN_ZONE_TYPES);
+const SUN_EXPOSURE_SET = new Set<string>(SCAN_SUN_EXPOSURES);
+const PLANT_TYPE_SET = new Set<string>(SCAN_PLANT_TYPES);
+const HEALTH_STATUS_SET = new Set<string>(SCAN_HEALTH_STATUSES);
+const CARE_TYPE_SET = new Set<string>(SCAN_CARE_TYPES);
+
+const MAX_SCANNED_PLANTS = 8;
+const MAX_SCANNED_CARE = 4;
+const MAX_DUE_IN_DAYS = 365;
+
+export interface ScanGardenPhotoResult {
+    scan: GardenScan;
+    model: string;
+}
+
+const trimTo = (raw: unknown, max: number): string =>
+    typeof raw === 'string' ? raw.trim().slice(0, max) : '';
+
+/** Positive integer within [min, max], or null. Rejects NaN, 0, negatives, floats-as-strings. */
+const boundedInt = (raw: unknown, min: number, max: number): number | null => {
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(n)) return null;
+    const rounded = Math.round(n);
+    if (rounded < min || rounded > max) return null;
+    return rounded;
+};
+
+const sanitizeScannedPlant = (raw: unknown): ScannedPlant | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const name = trimTo(r.name, 120);
+    if (!name) return null;
+
+    const plantTypeRaw = trimTo(r.plant_type, 40);
+    const healthRaw = trimTo(r.health_status, 40);
+
+    return {
+        name,
+        plant_type: PLANT_TYPE_SET.has(plantTypeRaw) ? plantTypeRaw : 'Autre',
+        variety: trimTo(r.variety, 120) || null,
+        // An unrecognised status defaults to the DB default rather than to an
+        // alarming one — the user reviews the form before it's written anyway.
+        health_status: HEALTH_STATUS_SET.has(healthRaw) ? healthRaw : 'En bonne santé',
+        watering_frequency_days: boundedInt(r.watering_frequency_days, 1, 30),
+    };
+};
+
+const sanitizeScannedZone = (raw: unknown): ScannedZone | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const name = trimTo(r.name, 120);
+    if (!name) return null;
+
+    const zoneTypeRaw = trimTo(r.zone_type, 40);
+    const sunRaw = trimTo(r.sun_exposure, 40);
+
+    return {
+        name,
+        zone_type: ZONE_TYPE_SET.has(zoneTypeRaw) ? zoneTypeRaw : 'Autre',
+        sun_exposure: SUN_EXPOSURE_SET.has(sunRaw) ? sunRaw : null,
+        notes: trimTo(r.notes, 400),
+    };
+};
+
+const sanitizeScannedCare = (raw: unknown): ScannedCare | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const careTypeRaw = trimTo(r.care_type, 40);
+    // No fallback here: a care task with an invented type is worse than no task.
+    if (!CARE_TYPE_SET.has(careTypeRaw)) return null;
+
+    const title = trimTo(r.title, 120);
+    if (!title) return null;
+
+    return {
+        care_type: careTypeRaw,
+        title,
+        due_in_days: boundedInt(r.due_in_days, 0, MAX_DUE_IN_DAYS) ?? 0,
+        recurrence_days: boundedInt(r.recurrence_days, 1, MAX_DUE_IN_DAYS),
+        notes: trimTo(r.notes, 400) || null,
+    };
+};
+
+const sanitizeScannedObservation = (raw: unknown): ScannedObservation | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const notes = trimTo(r.notes, 400);
+    if (!notes) return null;
+
+    const healthRaw = trimTo(r.health_status, 40);
+
+    return {
+        notes,
+        health_status: HEALTH_STATUS_SET.has(healthRaw) ? healthRaw : null,
+        height_cm: boundedInt(r.height_cm, 1, 10_000),
+    };
+};
+
+const sanitizeGardenScan = (raw: unknown, mode: GardenScanMode): GardenScan | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const confidenceRaw = trimTo(r.confidence, 20).toLowerCase();
+    const confidence = (
+        SCAN_CONFIDENCE_VALID.has(confidenceRaw) ? confidenceRaw : 'low'
+    ) as GardenScan['confidence'];
+
+    // 'plant' mode returns a single `plant` object; 'zone' mode returns `plants[]`.
+    const plants: ScannedPlant[] = [];
+    if (mode === 'plant') {
+        const plant = sanitizeScannedPlant(r.plant);
+        if (plant) plants.push(plant);
+    } else {
+        const rawPlants = Array.isArray(r.plants) ? r.plants : [];
+        for (const item of rawPlants) {
+            if (plants.length >= MAX_SCANNED_PLANTS) break;
+            const plant = sanitizeScannedPlant(item);
+            if (plant) plants.push(plant);
+        }
+    }
+
+    const care: ScannedCare[] = [];
+    const rawCare = Array.isArray(r.care) ? r.care : [];
+    for (const item of rawCare) {
+        if (care.length >= MAX_SCANNED_CARE) break;
+        const task = sanitizeScannedCare(item);
+        if (task) care.push(task);
+    }
+
+    const zone = mode === 'zone' ? sanitizeScannedZone(r.zone) : null;
+    const observation = sanitizeScannedObservation(r.observation);
+
+    // The model's own `detected` flag is only trusted to say "no": whatever it
+    // claims, a scan that yielded nothing usable after sanitising IS a miss.
+    const hasContent = plants.length > 0 || care.length > 0 || zone !== null;
+    const detected = r.detected !== false && hasContent;
+
+    return {
+        mode,
+        detected,
+        confidence,
+        zone,
+        plants,
+        care,
+        observation,
+        warnings: stringArray(r.warnings, 3),
+    };
+};
+
+/**
+ * Identify a plant (mode 'plant') or a whole area (mode 'zone') from a photo and
+ * propose the zone / plants / care tasks / journal entry to create. Uses the
+ * configured vision model; the image arrives already encoded as a base64 data
+ * URL and is never persisted.
+ *
+ * Nothing is written to the database here — the caller renders the proposal in
+ * an editable form and the user confirms, exactly like the receipt scanner.
+ */
+export const scanGardenPhoto = async (
+    input: GardenScanInput,
+    ctx: { userId: string },
+): Promise<ScanGardenPhotoResult> => {
+    if (!input.imageDataUrl.startsWith('data:image/')) {
+        throw new AiError('BAD_REQUEST', 'imageDataUrl must be a data:image/* URL');
+    }
+
+    const cfg = getAiConfig();
+    const model = cfg.models.vision;
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: gardenScanSystemPrompt(input.mode) },
+                { role: 'user', content: buildGardenScanUserMessage(input) },
+            ],
+            temperature: 0,
+            // Zone mode has to fit a zone + up to 8 plants + 4 tasks; plant mode
+            // is a fraction of that. Budget accordingly instead of paying for the
+            // worst case every time.
+            maxTokens: input.mode === 'zone' ? 1200 : 700,
+            jsonMode: true,
+            model,
+        },
+        { userId: ctx.userId, feature: `garden.scan_${input.mode}`, model },
+    );
+
+    const parsed = safeParseJson(response.content);
+    const scan = sanitizeGardenScan(parsed, input.mode);
+    if (!scan) {
+        throw new AiError('BAD_JSON', 'Model did not return a usable garden scan');
+    }
+
+    return { scan, model: response.model };
+};
+
+/** Re-export so routes and tests can build the input shape with proper types. */
+export type {
+    GardenScan,
+    GardenScanInput,
+    GardenScanMode,
+    GardenScanZoneContext,
+    ScannedCare,
+    ScannedObservation,
+    ScannedPlant,
+    ScannedZone,
+} from './prompts/gardenScanPrompts';
 
 // ---------------------------------------------------------------------------
 // Vacation plan generation — Vacations page "Generate AI plan"

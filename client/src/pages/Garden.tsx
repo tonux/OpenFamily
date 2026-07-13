@@ -11,6 +11,7 @@ import {
     Eye,
     AlertTriangle,
     CalendarClock,
+    ScanLine,
     Trash2,
 } from 'lucide-react';
 import {
@@ -30,6 +31,7 @@ import ZoneCard from '../components/app/ZoneCard';
 import PlantCard from '../components/app/PlantCard';
 import CareCard from '../components/app/CareCard';
 import GardenTipsDialog from '../components/app/GardenTipsDialog';
+import GardenScanDialog from '../components/app/GardenScanDialog';
 import {
     GARDEN_ZONE_TYPES,
     GARDEN_LOCATIONS,
@@ -286,6 +288,7 @@ const ZonesTab: React.FC = () => {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editing, setEditing] = useState<GardenZone | null>(null);
     const [tipsZone, setTipsZone] = useState<GardenZone | null>(null);
+    const [scanOpen, setScanOpen] = useState(false);
 
     const onSubmitSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -318,15 +321,21 @@ const ZonesTab: React.FC = () => {
                         />
                     </div>
                 </form>
-                <Button
-                    onClick={() => {
-                        setEditing(null);
-                        setDialogOpen(true);
-                    }}
-                >
-                    <Plus className="mr-2 h-4 w-4" />
-                    {t('garden.zone.add')}
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="secondary" onClick={() => setScanOpen(true)}>
+                        <ScanLine className="mr-2 h-4 w-4" />
+                        {t('garden.scan.zoneCta')}
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            setEditing(null);
+                            setDialogOpen(true);
+                        }}
+                    >
+                        <Plus className="mr-2 h-4 w-4" />
+                        {t('garden.zone.add')}
+                    </Button>
+                </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -385,6 +394,12 @@ const ZonesTab: React.FC = () => {
             )}
 
             <ZoneDialog open={dialogOpen} onOpenChange={setDialogOpen} zone={editing} />
+            <GardenScanDialog
+                open={scanOpen}
+                onOpenChange={setScanOpen}
+                mode="zone"
+                zones={zonesQuery.data ?? []}
+            />
             {tipsZone && (
                 <GardenTipsDialog
                     open={!!tipsZone}
@@ -581,6 +596,7 @@ const PlantsTab: React.FC = () => {
     const deleteMut = useDeletePlant();
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editing, setEditing] = useState<GardenPlant | null>(null);
+    const [scanOpen, setScanOpen] = useState(false);
 
     const onSubmitSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -615,15 +631,21 @@ const PlantsTab: React.FC = () => {
                         />
                     </div>
                 </form>
-                <Button
-                    onClick={() => {
-                        setEditing(null);
-                        setDialogOpen(true);
-                    }}
-                >
-                    <Plus className="mr-2 h-4 w-4" />
-                    {t('garden.plant.add')}
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="secondary" onClick={() => setScanOpen(true)}>
+                        <ScanLine className="mr-2 h-4 w-4" />
+                        {t('garden.scan.plantCta')}
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            setEditing(null);
+                            setDialogOpen(true);
+                        }}
+                    >
+                        <Plus className="mr-2 h-4 w-4" />
+                        {t('garden.plant.add')}
+                    </Button>
+                </div>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -698,6 +720,13 @@ const PlantsTab: React.FC = () => {
                 onOpenChange={setDialogOpen}
                 plant={editing}
                 zones={zones}
+            />
+            <GardenScanDialog
+                open={scanOpen}
+                onOpenChange={setScanOpen}
+                mode="plant"
+                zones={zones}
+                defaultZoneId={zoneFilter || undefined}
             />
         </div>
     );

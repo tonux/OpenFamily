@@ -184,6 +184,53 @@
       "warnings": "Points de vigilance",
       "failed": "La génération des conseils a échoué.",
       "softNotice": "Les conseils IA sont momentanément indisponibles (service désactivé ou quota atteint). Réessayez plus tard."
+    },
+    "scan": {
+      "plantCta": "Scanner une plante",
+      "zoneCta": "Scanner une zone",
+      "titlePlant": "Scanner une plante",
+      "titleZone": "Scanner une zone",
+      "descPlant": "Photographiez une plante : l'IA propose son identification, son état de santé, les gestes à prévoir et une entrée de journal.",
+      "descZone": "Photographiez un espace du jardin : l'IA propose la zone, les plantes qu'elle reconnaît, les gestes à prévoir et une entrée de journal.",
+      "pickPhoto": "Prendre ou choisir une photo",
+      "formatsHint": "JPEG, PNG, WEBP ou HEIC — 5 Mo maximum",
+      "previewAlt": "Aperçu de la photo",
+      "removePhoto": "Retirer la photo",
+      "analyze": "Analyser la photo",
+      "scanning": "Analyse en cours…",
+      "rescan": "Analyser à nouveau",
+      "proposalTitle": "Proposition de l'IA",
+      "notDetected": "Aucune plante ni espace vert identifiable sur cette photo. Réessayez avec une photo plus nette ou mieux cadrée.",
+      "zoneTarget": "Rattacher à la zone",
+      "createProposedZone": "➕ Créer la zone « {{name}} »",
+      "plantsTitle": "Plantes détectées",
+      "careTitle": "Entretiens à planifier",
+      "journalTitle": "Ajouter au journal",
+      "journalNeedsTarget": "Sélectionnez une zone ou gardez au moins une plante pour pouvoir enregistrer une entrée de journal.",
+      "includeItem": "Inclure cet élément",
+      "reviewHint": "Vérifiez et corrigez avant d'enregistrer : l'IA se trompe surtout sur la variété exacte. Rien n'est créé tant que vous n'avez pas confirmé.",
+      "confirm": "Créer les éléments cochés",
+      "saving": "Enregistrement…",
+      "savedToast": "Éléments créés depuis la photo",
+      "savedSummary": "{{plants}} plante(s), {{care}} entretien(s).",
+      "confidence": {
+        "high": "Confiance élevée",
+        "medium": "Confiance moyenne",
+        "low": "Confiance faible"
+      },
+      "errors": {
+        "network": "Connexion impossible. Vérifiez votre réseau.",
+        "aborted": "Analyse annulée.",
+        "disabled": "L'IA est désactivée sur ce serveur.",
+        "quota_exceeded": "Quota IA mensuel atteint.",
+        "bad_json": "Réponse illisible du modèle. Réessayez.",
+        "scan_http": "L'analyse a échoué (erreur {{status}}).",
+        "scan_failed": "L'analyse de la photo a échoué.",
+        "unsupported_format": "Format non supporté : {{type}}.",
+        "unknown_type": "type inconnu",
+        "too_large": "Image trop volumineuse (max {{size}} Mo).",
+        "partial_save": "Une erreur est survenue en cours d'enregistrement : certains éléments ont déjà été créés. Vérifiez vos zones, plantes et entretiens avant de relancer."
+      }
     }
   }
 }

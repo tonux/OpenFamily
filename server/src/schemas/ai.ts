@@ -185,3 +185,21 @@ export const generateGardeningTipsBodySchema = z
     .strict();
 
 export type GenerateGardeningTipsBody = z.infer<typeof generateGardeningTipsBodySchema>;
+
+// Garden photo scan. Multipart, so these are the *text* fields sitting next to
+// the image — they arrive as strings and are parsed inside the handler (after
+// multer has populated req.body), not by the `validate` middleware, which runs
+// too early to see them.
+//
+// `zoneId` is optional and only meaningful in 'plant' mode: it tells the model
+// which zone the plant lives in so the advice fits the spot. The route checks
+// ownership before passing anything to the prompt.
+export const gardenScanBodySchema = z
+    .object({
+        mode: z.enum(['plant', 'zone']),
+        season: z.enum(['Printemps', 'Été', 'Automne', 'Hiver']).optional(),
+        zoneId: z.string().uuid().optional(),
+    })
+    .strict();
+
+export type GardenScanBody = z.infer<typeof gardenScanBodySchema>;

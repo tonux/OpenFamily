@@ -16,6 +16,8 @@ import {
     generateVacationPlan,
     generateVacationLuggage,
     generateGardeningTips,
+    scanGardenPhoto,
+    type GardenScanZoneContext,
     type RecipeMemberInput,
     type PlannedMealLine,
     type LunchboxMemberInput,
@@ -36,6 +38,7 @@ import {
     generateVacationLuggageBodySchema,
     generateVacationPlanBodySchema,
     generateGardeningTipsBodySchema,
+    gardenScanBodySchema,
     kidsActivitiesBodySchema,
     parseShoppingNLBodySchema,
 } from '../schemas/ai';
@@ -53,11 +56,11 @@ const router = Router();
 // auth here so future PRs (#17-#20) can add features without re-thinking it.
 router.use(authMiddleware);
 
-// Multer config for the receipt scanner only — stays in memory, never touches
-// disk or MinIO. 5 MB cap is enough for a smartphone JPEG; anything bigger is
-// either a misuse or needs downscaling client-side first.
-const RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
-const RECEIPT_ALLOWED_MIME = new Set([
+// Multer config for the vision scanners (receipt, garden photo) — the image
+// stays in memory, never touches disk or MinIO. 5 MB is enough for a smartphone
+// JPEG; anything bigger is either a misuse or needs downscaling client-side.
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const IMAGE_ALLOWED_MIME = new Set([
     'image/jpeg',
     'image/png',
     'image/webp',
@@ -72,10 +75,62 @@ const RECEIPT_DEFAULT_CATEGORIES = [
     'Loisirs',
     'Autre',
 ];
-const receiptUpload = multer({
+const imageUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: RECEIPT_MAX_BYTES, files: 1 },
+    limits: { fileSize: IMAGE_MAX_BYTES, files: 1 },
 });
+
+/**
+ * Runs multer for a single `file` field and turns its failures into the JSON
+ * error envelope the rest of the API uses. Must sit before any handler that
+ * reads req.file or req.body on a multipart route — multer is what populates both.
+ */
+const singleImageUpload =
+    (feature: string): import('express').RequestHandler =>
+    (req, res, next) => {
+        imageUpload.single('file')(req, res, (err: unknown) => {
+            if (!err) return next();
+            if ((err as { code?: string })?.code === 'LIMIT_FILE_SIZE') {
+                return res.status(413).json({
+                    success: false,
+                    error: {
+                        code: 'FILE_TOO_LARGE',
+                        message: `Image trop volumineuse (max ${IMAGE_MAX_BYTES / (1024 * 1024)} MB)`,
+                    },
+                });
+            }
+            logger.warn(`ai.${feature}_multer_error`, {
+                error: err instanceof Error ? err.message : String(err),
+            });
+            return res.status(400).json({ success: false, error: 'Upload error' });
+        });
+    };
+
+/** Shared guard for the two vision routes: rejects a missing or non-image upload. */
+const requireImageFile = (
+    req: AuthRequest,
+    res: import('express').Response,
+): Express.Multer.File | null => {
+    const file = (req as AuthRequest & { file?: Express.Multer.File }).file;
+    if (!file) {
+        res.status(400).json({ success: false, error: 'Missing "file" multipart field' });
+        return null;
+    }
+    if (!IMAGE_ALLOWED_MIME.has(file.mimetype)) {
+        res.status(415).json({
+            success: false,
+            error: {
+                code: 'UNSUPPORTED_MIME',
+                message: `Type d'image non supporté : ${file.mimetype}`,
+            },
+        });
+        return null;
+    }
+    return file;
+};
+
+const toImageDataUrl = (file: Express.Multer.File): string =>
+    `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
 
 const sendAiError = (res: import('express').Response, error: unknown, feature: string): void => {
     if (error instanceof AiError) {
@@ -880,41 +935,11 @@ router.post(
  */
 router.post(
     '/budget/scan-receipt',
-    (req, res, next) => {
-        receiptUpload.single('file')(req, res, (err: unknown) => {
-            if (!err) return next();
-            if ((err as { code?: string })?.code === 'LIMIT_FILE_SIZE') {
-                return res.status(413).json({
-                    success: false,
-                    error: {
-                        code: 'FILE_TOO_LARGE',
-                        message: `Image trop volumineuse (max ${RECEIPT_MAX_BYTES / (1024 * 1024)} MB)`,
-                    },
-                });
-            }
-            logger.warn('ai.scan_receipt_multer_error', {
-                error: err instanceof Error ? err.message : String(err),
-            });
-            return res.status(400).json({ success: false, error: 'Upload error' });
-        });
-    },
+    singleImageUpload('scan_receipt'),
     async (req: AuthRequest, res) => {
         try {
-            const file = (req as AuthRequest & { file?: Express.Multer.File }).file;
-            if (!file) {
-                return res
-                    .status(400)
-                    .json({ success: false, error: 'Missing "file" multipart field' });
-            }
-            if (!RECEIPT_ALLOWED_MIME.has(file.mimetype)) {
-                return res.status(415).json({
-                    success: false,
-                    error: {
-                        code: 'UNSUPPORTED_MIME',
-                        message: `Type d'image non supporté : ${file.mimetype}`,
-                    },
-                });
-            }
+            const file = requireImageFile(req, res);
+            if (!file) return;
 
             const userRow = await query('SELECT currency FROM users WHERE id = $1', [req.userId]);
             const userCurrency =
@@ -922,11 +947,9 @@ router.post(
                     ? (userRow.rows[0].currency as string)
                     : undefined;
 
-            const imageDataUrl = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-
             const result = await extractBudgetEntryFromReceipt(
                 {
-                    imageDataUrl,
+                    imageDataUrl: toImageDataUrl(file),
                     suggestedCategories: RECEIPT_DEFAULT_CATEGORIES,
                     userCurrency,
                 },
@@ -1472,5 +1495,87 @@ router.post(
         }
     },
 );
+
+/**
+ * Northern-hemisphere meteorological seasons. Only used as the default when the
+ * client doesn't send one — the Garden UI lets the user override it, which is
+ * what southern-hemisphere users rely on.
+ */
+const seasonForMonth = (month: number): 'Printemps' | 'Été' | 'Automne' | 'Hiver' => {
+    if (month >= 3 && month <= 5) return 'Printemps';
+    if (month >= 6 && month <= 8) return 'Été';
+    if (month >= 9 && month <= 11) return 'Automne';
+    return 'Hiver';
+};
+
+/**
+ * POST /api/ai/garden/scan-photo
+ * Content-Type: multipart/form-data
+ * Body: file (single image, ≤ 5 MB) + mode ('plant' | 'zone') + season? + zoneId?
+ * Returns: { scan: GardenScan, model: string }
+ *
+ * Turns a photo into a PROPOSAL for the Garden module: the zone, the plants,
+ * the care tasks to schedule and a journal entry. Read-only — the client renders
+ * the proposal in an editable form and creates the rows through the regular
+ * /api/garden endpoints once the user confirms. Same human-in-the-loop contract
+ * as the receipt scanner, and for the same reason: a hallucinated plant that
+ * silently lands in the journal is worse than no scan at all.
+ *
+ * The image is never persisted: it's encoded to a data URL in memory, sent to
+ * the vision model, then dropped.
+ */
+router.post('/garden/scan-photo', singleImageUpload('garden_scan'), async (req, res) => {
+    const authReq = req as AuthRequest;
+    try {
+        const file = requireImageFile(authReq, res);
+        if (!file) return;
+
+        // multer has populated req.body with the multipart text fields by now;
+        // the `validate` middleware couldn't have seen them (it runs first).
+        const parsedBody = gardenScanBodySchema.safeParse(authReq.body);
+        if (!parsedBody.success) {
+            return res.status(400).json({
+                success: false,
+                error: { code: 'VALIDATION_ERROR', message: 'Invalid scan parameters' },
+            });
+        }
+        const { mode, season, zoneId } = parsedBody.data;
+
+        // A zone only sharpens the advice for a single plant; in zone mode the
+        // photo IS the zone, so we don't look one up.
+        let zoneContext: GardenScanZoneContext | null = null;
+        if (zoneId && mode === 'plant') {
+            const zoneRow = await query(
+                `SELECT name, zone_type, sun_exposure, soil_type
+                 FROM garden_zones WHERE id = $1 AND user_id = $2`,
+                [zoneId, authReq.userId],
+            );
+            if (zoneRow.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Zone not found' });
+            }
+            const zone = zoneRow.rows[0];
+            zoneContext = {
+                name: zone.name as string,
+                zoneType: zone.zone_type as string,
+                sunExposure: zone.sun_exposure ?? null,
+                soilType: zone.soil_type ?? null,
+            };
+        }
+
+        const result = await scanGardenPhoto(
+            {
+                imageDataUrl: toImageDataUrl(file),
+                mode,
+                season: season ?? seasonForMonth(new Date().getMonth() + 1),
+                zoneContext,
+            },
+            { userId: authReq.userId! },
+        );
+
+        res.json({ success: true, data: result });
+    } catch (error) {
+        sendAiError(res, error, 'garden_scan_photo');
+    }
+});
 
 export default router;
