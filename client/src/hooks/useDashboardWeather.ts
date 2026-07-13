@@ -42,10 +42,28 @@ export interface ClothingSuggestionDTO {
 
 export type ClothingDegradedCode = 'DISABLED' | 'QUOTA_EXCEEDED' | 'BAD_JSON';
 
+export type DayMode = 'school' | 'home';
+export type DayReason = 'school_day' | 'weekend' | 'school_break' | 'default_summer';
+
+/**
+ * Which day the dashboard is talking about, and why. The server picks tomorrow
+ * during term (lay out the outfit tonight) and today during the holidays (what
+ * do we DO this morning?) — so the widget must read this rather than assume.
+ */
+export interface DayContextDTO {
+    /** YYYY-MM-DD */
+    date: string;
+    mode: DayMode;
+    reason: DayReason;
+    /** Label of the user-declared school break, when reason is 'school_break'. */
+    breakLabel: string | null;
+}
+
 export interface DashboardWeatherDTO {
     weather: ForecastDTO;
     city: string | null;
     kids: ClothingKidDTO[];
+    dayContext: DayContextDTO;
     suggestions: ClothingSuggestionDTO[];
     cached: boolean;
     model: string;

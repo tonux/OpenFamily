@@ -72,6 +72,19 @@
         "appointments": "Rendez-vous",
         "schedule_entries": "Plannings"
       }
+    },
+    "schoolBreaks": {
+      "title": "Vacances scolaires",
+      "description": "Déclare les périodes où les enfants sont à la maison. Sans rien saisir, l'app considère déjà les week-ends et juillet-août comme des vacances.",
+      "emptyHint": "Aucune période déclarée — les week-ends et juillet-août sont déjà pris en compte automatiquement. Ajoute une période pour la Toussaint, Noël, février… ou pour des dates d'été précises.",
+      "labelPlaceholder": "Nom de la période (ex. Vacances de la Toussaint)",
+      "startDate": "Date de début",
+      "endDate": "Date de fin",
+      "add": "Ajouter la période",
+      "adding": "Ajout…",
+      "delete": "Supprimer la période",
+      "errorInvertedRange": "La date de fin doit être après la date de début.",
+      "errorGeneric": "Impossible d'enregistrer la période."
     }
   },
   "language": {

@@ -49,6 +49,14 @@ export const queryKeys = {
         all: ['dashboard'] as const,
         weatherClothing: (override: { latitude: number; longitude: number } | null) =>
             [...queryKeys.dashboard.all, 'weather-clothing', override] as const,
+        kidsActivities: (
+            override: { latitude: number; longitude: number } | null,
+            exclude: string[],
+        ) => [...queryKeys.dashboard.all, 'kids-activities', override, exclude] as const,
+    },
+    schoolBreaks: {
+        all: ['school-breaks'] as const,
+        list: () => [...queryKeys.schoolBreaks.all, 'list'] as const,
     },
     weather: {
         all: ['weather'] as const,
