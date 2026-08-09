@@ -21,6 +21,10 @@ const SUBJECT_PREFIX_BY_TYPE: Record<string, string> = {
     contract_due_soon: '[OpenFamily] Échéance contrat',
     maintenance_due_soon: '[OpenFamily] Entretien à prévoir',
     warranty_expiring: '[OpenFamily] Garantie bientôt expirée',
+    garden_care_due: '[OpenFamily] Entretien jardin à faire',
+    school_event_reminder: '[OpenFamily] Rappel école',
+    school_study_reminder: '[OpenFamily] Séance d’étude à venir',
+    school_supplies_pending: '[OpenFamily] Fournitures scolaires à acheter',
 };
 
 export const renderNotificationEmail = (

@@ -16,6 +16,7 @@ import {
     Users,
     Wrench,
     Sprout,
+    GraduationCap,
     Plane,
     Settings,
     Moon,
@@ -50,6 +51,7 @@ const navigation = [
     { labelKey: 'nav.family', href: '/family', icon: Users },
     { labelKey: 'nav.house', href: '/house', icon: Wrench },
     { labelKey: 'nav.garden', href: '/garden', icon: Sprout },
+    { labelKey: 'nav.school', href: '/school', icon: GraduationCap },
     { labelKey: 'nav.vacations', href: '/vacations', icon: Plane },
     { labelKey: 'nav.settings', href: '/settings', icon: Settings },
 ] as const;
@@ -73,6 +75,7 @@ const quickActions = [
     { labelKey: 'quick_actions.add_member', href: '/family', icon: Users },
     { labelKey: 'quick_actions.add_equipment', href: '/house', icon: Wrench },
     { labelKey: 'quick_actions.add_garden', href: '/garden', icon: Sprout },
+    { labelKey: 'quick_actions.add_school', href: '/school', icon: GraduationCap },
     { labelKey: 'quick_actions.add_vacation', href: '/vacations', icon: Plane },
 ] as const;
 

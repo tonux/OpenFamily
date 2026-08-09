@@ -123,4 +123,34 @@ export const queryKeys = {
             [...queryKeys.garden.all, 'observations', filters ?? null] as const,
         statistics: () => [...queryKeys.garden.all, 'statistics'] as const,
     },
+    school: {
+        all: ['school'] as const,
+        students: (filters?: { school_year?: string }) =>
+            [...queryKeys.school.all, 'students', filters ?? null] as const,
+        events: (filters?: {
+            student_id?: string;
+            event_type?: string;
+            from?: string;
+            to?: string;
+            scope?: 'upcoming' | 'all';
+        }) => [...queryKeys.school.all, 'events', filters ?? null] as const,
+        supplies: (filters?: {
+            student_id?: string;
+            category?: string;
+            purchased?: 'true' | 'false';
+            q?: string;
+        }) => [...queryKeys.school.all, 'supplies', filters ?? null] as const,
+        studySessions: (filters?: {
+            student_id?: string;
+            subject?: string;
+            status?: string;
+            from?: string;
+            to?: string;
+        }) => [...queryKeys.school.all, 'study-sessions', filters ?? null] as const,
+        grades: (filters?: { student_id?: string; subject?: string; term?: string }) =>
+            [...queryKeys.school.all, 'grades', filters ?? null] as const,
+        statistics: (studentId?: string) =>
+            [...queryKeys.school.all, 'statistics', studentId ?? null] as const,
+        presets: () => [...queryKeys.school.all, 'presets'] as const,
+    },
 } as const;

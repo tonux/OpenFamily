@@ -107,6 +107,12 @@ export const notificationDestination = (notification: Notification): string => {
         case 'maintenance_due_soon':
         case 'warranty_expiring':
             return '/house';
+        case 'garden_care_due':
+            return '/garden';
+        case 'school_event_reminder':
+        case 'school_study_reminder':
+        case 'school_supplies_pending':
+            return '/school';
         default:
             return '/';
     }

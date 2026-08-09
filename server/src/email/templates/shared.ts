@@ -33,6 +33,8 @@ export const notificationPath = (type: string): string => {
     ) {
         return '/house';
     }
+    if (type === 'garden_care_due') return '/garden';
+    if (type.startsWith('school_')) return '/school';
     return '/';
 };
 

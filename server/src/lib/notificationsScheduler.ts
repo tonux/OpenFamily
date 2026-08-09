@@ -217,6 +217,91 @@ const runMorningPulse = async (): Promise<void> => {
         });
     }
 
+    // (e ter) School calendar: events whose own lead time lands on today.
+    // Each row carries reminder_days_before (default 1), so the parent gets the
+    // heads-up "the day before" by default, and earlier for the events that
+    // need preparation (rentrée, semaine de relâche…).
+    const dueSchoolEvents = await query(
+        `SELECT e.id, e.user_id, e.title, e.event_type, e.start_date, e.start_time,
+                e.location, e.reminder_days_before, s.name AS student_name
+         FROM school_events e
+         LEFT JOIN school_students s ON e.student_id = s.id
+         WHERE e.reminder_enabled = true
+           AND e.start_date - e.reminder_days_before = CURRENT_DATE`,
+    );
+    for (const row of dueSchoolEvents.rows) {
+        const lead = Number(row.reminder_days_before);
+        const when = lead === 0 ? "aujourd'hui" : lead === 1 ? 'demain' : `dans ${lead} jours`;
+        const startTime = typeof row.start_time === 'string' ? row.start_time.slice(0, 5) : null;
+        const details = [row.student_name, row.location, startTime].filter(Boolean).join(' — ');
+        await createNotificationIfNotExists({
+            userId: row.user_id,
+            type: 'school_event_reminder',
+            title: `École : ${row.title} ${when}`,
+            message: details ? `${row.event_type} — ${details}` : row.event_type,
+            relatedId: row.id,
+            dedupWindowHours: 23,
+        });
+    }
+
+    // (e quater) At-home study sessions planned for today or tomorrow.
+    const dueStudySessions = await query(
+        `SELECT ss.id, ss.user_id, ss.subject, ss.title, ss.scheduled_date, ss.start_time,
+                ss.duration_minutes, s.name AS student_name
+         FROM school_study_sessions ss
+         JOIN school_students s ON ss.student_id = s.id
+         WHERE ss.reminder_enabled = true
+           AND ss.status = 'Planifiée'
+           AND ss.scheduled_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '1 day'`,
+    );
+    for (const row of dueStudySessions.rows) {
+        const daysUntil = Math.max(
+            0,
+            Math.round(
+                (new Date(row.scheduled_date).getTime() - Date.now()) / (24 * 60 * 60 * 1000),
+            ),
+        );
+        const when = daysUntil === 0 ? "aujourd'hui" : 'demain';
+        await createNotificationIfNotExists({
+            userId: row.user_id,
+            type: 'school_study_reminder',
+            title: `Étude ${when} : ${row.subject}`,
+            message: `${row.title} — ${row.student_name} — ${row.duration_minutes} min`,
+            relatedId: row.id,
+            dedupWindowHours: 23,
+        });
+    }
+
+    // (e quinquies) Back-to-school shopping still open with the rentrée in
+    // sight. One nudge per student per week — the parent can't act daily, and
+    // the checklist itself is the detailed view.
+    const pendingSupplies = await query(
+        `SELECT s.id, s.user_id, s.name,
+                COUNT(*) FILTER (WHERE sup.is_purchased = false) AS remaining,
+                MIN(e.start_date) AS rentree_date
+         FROM school_students s
+         JOIN school_supplies sup ON sup.student_id = s.id
+         JOIN school_events e ON e.student_id = s.id
+           AND e.event_type = 'Rentrée'
+           AND e.start_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '21 days'
+         GROUP BY s.id, s.user_id, s.name
+         HAVING COUNT(*) FILTER (WHERE sup.is_purchased = false) > 0`,
+    );
+    for (const row of pendingSupplies.rows) {
+        const daysUntil = Math.max(
+            0,
+            Math.round((new Date(row.rentree_date).getTime() - Date.now()) / (24 * 60 * 60 * 1000)),
+        );
+        await createNotificationIfNotExists({
+            userId: row.user_id,
+            type: 'school_supplies_pending',
+            title: 'Fournitures scolaires à acheter',
+            message: `${row.name} — ${row.remaining} article(s) restant(s), rentrée dans ${daysUntil} jours`,
+            relatedId: row.id,
+            dedupWindowHours: 24 * 7,
+        });
+    }
+
     // (e) Warranties expiring in the next 30 days. Notify once a week per
     // equipment (long dedup window) since the user can't act every day.
     const expiringWarranties = await query(

@@ -23,6 +23,7 @@ import notificationsRoutes from './routes/notifications';
 import documentsRoutes from './routes/documents';
 import vacationsRoutes from './routes/vacations';
 import schoolBreaksRoutes from './routes/schoolBreaks';
+import schoolRoutes from './routes/school';
 import { loadEnv } from './config/loadEnv';
 import logger from './lib/logger';
 
@@ -156,6 +157,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/vacations', vacationsRoutes);
 app.use('/api/school-breaks', schoolBreaksRoutes);
+app.use('/api/school', schoolRoutes);
 
 // 404 handler
 app.use((req, res) => {

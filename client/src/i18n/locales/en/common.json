@@ -14,6 +14,7 @@
     "family": "Family",
     "house": "Home",
     "garden": "Garden",
+    "school": "School",
     "vacations": "Vacations",
     "settings": "Settings",
     "mobile": {
@@ -37,6 +38,7 @@
     "add_member": "Add a family member",
     "add_equipment": "Add an equipment",
     "add_garden": "Add to garden",
+    "add_school": "Add a school event",
     "add_vacation": "Plan a vacation"
   },
   "header": {
