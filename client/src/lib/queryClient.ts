@@ -152,5 +152,13 @@ export const queryKeys = {
         statistics: (studentId?: string) =>
             [...queryKeys.school.all, 'statistics', studentId ?? null] as const,
         presets: () => [...queryKeys.school.all, 'presets'] as const,
+        revisionSheets: (filters?: {
+            student_id?: string;
+            subject?: string;
+            sheet_type?: string;
+            status?: string;
+            q?: string;
+        }) => [...queryKeys.school.all, 'revision-sheets', filters ?? null] as const,
+        revisionBooklets: () => [...queryKeys.school.all, 'revision-booklets'] as const,
     },
 } as const;

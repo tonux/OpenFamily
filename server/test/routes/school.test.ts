@@ -15,6 +15,7 @@ import request from 'supertest';
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const STUDENT_ID = '22222222-2222-4222-8222-222222222222';
 const SUPPLY_ID = '33333333-3333-4333-8333-333333333333';
+const SHEET_ID = '44444444-4444-4444-8444-444444444444';
 
 const supplyRow = (overrides: Record<string, unknown> = {}) => ({
     id: SUPPLY_ID,
@@ -71,6 +72,33 @@ const makeQueryMock = () =>
         }
         if (/UPDATE school_supplies/i.test(sql)) {
             return { rows: [supplyRow({ is_purchased: true, purchased_at: '2026-08-09' })] };
+        }
+        if (/INSERT INTO school_revision_sheets/i.test(sql)) {
+            return {
+                rows: [
+                    {
+                        id: SHEET_ID,
+                        student_id: STUDENT_ID,
+                        subject: 'Mathématique',
+                        topic: 'Les fractions',
+                        title: 'La pizzeria des fractions',
+                        sheet_type: 'Jeu',
+                        duration_minutes: 20,
+                        focus_warmup: null,
+                        instructions: null,
+                        exercises: [],
+                        status: 'À faire',
+                        mastery: null,
+                        completed_at: null,
+                        printed_at: null,
+                        source: null,
+                        notes: null,
+                        position: 1,
+                        created_at: new Date(),
+                        updated_at: new Date(),
+                    },
+                ],
+            };
         }
         return { rows: [] };
     });
@@ -239,5 +267,98 @@ describe('school routes', () => {
             student_id: STUDENT_ID,
         });
         expect(res.status).toBe(404);
+    });
+
+    // --- Revision sheets ----------------------------------------------------
+
+    it('creates a revision sheet and sends its exercises as jsonb', async () => {
+        const res = await authed('post', '/api/school/revision-sheets').send({
+            student_id: STUDENT_ID,
+            subject: 'Mathématique',
+            title: 'La pizzeria des fractions',
+            topic: 'Les fractions',
+            sheet_type: 'Jeu',
+            focus_warmup: 'Plie une feuille en huit avant de commencer.',
+            exercises: [{ prompt: 'Calcule les 3/4 de 20.', answer: '15', answer_lines: 1 }],
+        });
+        expect(res.status).toBe(201);
+        const insert = calls.find((c) => /INSERT INTO school_revision_sheets/i.test(c.sql));
+        expect(insert?.sql).toMatch(/\$10::jsonb/);
+        // The array must reach pg as a JSON string, not as a JS array — node-pg
+        // would otherwise serialise it as a Postgres array literal.
+        expect(typeof insert?.params?.[9]).toBe('string');
+        expect(JSON.parse(insert!.params![9] as string)).toHaveLength(1);
+    });
+
+    it('rejects an unknown sheet_type (400)', async () => {
+        const res = await authed('post', '/api/school/revision-sheets').send({
+            student_id: STUDENT_ID,
+            subject: 'Français',
+            title: 'X',
+            sheet_type: 'Sudoku',
+        });
+        expect(res.status).toBe(400);
+    });
+
+    it('rejects an exercise with an empty prompt (400)', async () => {
+        const res = await authed('post', '/api/school/revision-sheets').send({
+            student_id: STUDENT_ID,
+            subject: 'Français',
+            title: 'X',
+            exercises: [{ prompt: '   ' }],
+        });
+        expect(res.status).toBe(400);
+    });
+
+    it('stamps completed_at when a sheet is marked done, and clears it on reopen', async () => {
+        queryMock.current = (() => {
+            const base = makeQueryMock();
+            return vi.fn(async (sql: string, params?: unknown[]) => {
+                if (/UPDATE school_revision_sheets/i.test(sql)) {
+                    calls.push({ sql, params });
+                    return { rows: [{ id: SHEET_ID, exercises: [], position: 1 }] };
+                }
+                return base(sql, params);
+            });
+        })();
+
+        const done = await authed('patch', `/api/school/revision-sheets/${SHEET_ID}`).send({
+            status: 'Faite',
+        });
+        expect(done.status).toBe(200);
+        let update = calls.find((c) => /UPDATE school_revision_sheets/i.test(c.sql));
+        expect(update?.sql).toMatch(/completed_at = \$/);
+        expect(update?.params?.[1]).toBeInstanceOf(Date);
+
+        calls.length = 0;
+        await authed('patch', `/api/school/revision-sheets/${SHEET_ID}`).send({
+            status: 'À faire',
+        });
+        update = calls.find((c) => /UPDATE school_revision_sheets/i.test(c.sql));
+        expect(update?.params?.[1]).toBeNull();
+    });
+
+    it('lists the revision booklets with their subjects and totals', async () => {
+        const res = await authed('get', '/api/school/revision-booklets');
+        expect(res.status).toBe(200);
+        const booklet = res.body.data.find((b: { id: string }) => b.id === 'qc-4e-rentree');
+        expect(booklet).toBeDefined();
+        expect(booklet.sheets_count).toBeGreaterThan(0);
+        expect(booklet.subjects).toContain('Mathématique');
+        expect(booklet.total_minutes).toBeGreaterThan(0);
+    });
+
+    it('returns 404 for an unknown booklet', async () => {
+        const res = await authed('post', '/api/school/revision-booklets/nope/apply').send({
+            student_id: STUDENT_ID,
+        });
+        expect(res.status).toBe(404);
+    });
+
+    it('rejects mark-printed with an empty id list (400)', async () => {
+        const res = await authed('post', '/api/school/revision-sheets/mark-printed').send({
+            ids: [],
+        });
+        expect(res.status).toBe(400);
     });
 });

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -29,7 +30,10 @@ import {
     GraduationCap,
     Pencil,
     Plus,
+    Printer,
+    RotateCcw,
     Search,
+    Sparkles,
     Target,
     Trash2,
     TrendingUp,
@@ -52,12 +56,18 @@ import EmptyState from '../components/app/EmptyState';
 import {
     NO_CLASS_EVENT_TYPES,
     SCHOOL_EVENT_TYPES,
+    SCHOOL_REVISION_STATUSES,
+    SCHOOL_SHEET_TYPES,
     SCHOOL_STUDY_STATUSES,
     SCHOOL_SUBJECTS,
     SCHOOL_SUPPLY_CATEGORIES,
+    type RevisionExercise,
     type SchoolEvent,
     type SchoolEventType,
     type SchoolGrade,
+    type SchoolRevisionSheet,
+    type SchoolRevisionStatus,
+    type SchoolSheetType,
     type SchoolStudent,
     type SchoolStudySession,
     type SchoolStudyStatus,
@@ -65,7 +75,14 @@ import {
     type SchoolSupply,
     type SchoolSupplyCategory,
     type StudyPlanSlot,
+    useApplyRevisionBooklet,
     useApplySchoolPreset,
+    useCreateRevisionSheet,
+    useDeleteRevisionSheet,
+    useMarkRevisionSheetsPrinted,
+    useRevisionBooklets,
+    useSchoolRevisionSheets,
+    useUpdateRevisionSheet,
     useCompleteStudySession,
     useCreateSchoolEvent,
     useCreateSchoolGrade,
@@ -94,9 +111,10 @@ import {
 // =============================================================================
 // /school — "École" module.
 //
-// Five tabs: overview, calendar, supplies checklist, at-home study plan, results.
-// Everything is scoped to ONE selected student, picked in the page header, so
-// each tab only ever shows one child's year.
+// Six tabs: overview, calendar, supplies checklist, at-home study plan,
+// printable revision sheets, results. Everything is scoped to ONE selected
+// student, picked in the page header, so each tab only ever shows one child's
+// year.
 //
 // Enum values are stored in French; they are translated at render time via
 // t('school.<map>.' + value) — never stored translated.
@@ -309,6 +327,11 @@ const School: React.FC = () => {
                             value: 'study',
                             label: t('school.tabs.study'),
                             content: <StudyTab student={student} />,
+                        },
+                        {
+                            value: 'revisions',
+                            label: t('school.tabs.revisions'),
+                            content: <RevisionsTab student={student} />,
                         },
                         {
                             value: 'results',
@@ -2135,6 +2158,939 @@ const PlannerDialog: React.FC<{ open: boolean; studentId: string; onClose: () =>
                     {planMut.isPending
                         ? t('school.study.plannerGenerating')
                         : t('school.study.plannerGenerate')}
+                </Button>
+            </div>
+        </Dialog>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Revisions tab — printable one-page worksheets
+//
+// The screen side is a selectable list; the paper side is <RevisionPrintDoc>,
+// portalled straight into <body> so the print stylesheet in index.css can hide
+// the whole app with `body > *:not(#print-root)`. Printing therefore needs no
+// extra library and no popup: we render the pages, call window.print(), and
+// stamp printed_at on what went out.
+// ---------------------------------------------------------------------------
+
+const SHEET_TONE: Record<SchoolSheetType, 'default' | 'primary' | 'success' | 'warning'> = {
+    Jeu: 'success',
+    Défi: 'warning',
+    Énigme: 'primary',
+    Exercice: 'default',
+    Quiz: 'primary',
+    Projet: 'warning',
+};
+
+const REVISION_TONE: Record<SchoolRevisionStatus, 'default' | 'success' | 'warning'> = {
+    'À faire': 'default',
+    Faite: 'success',
+    'À revoir': 'warning',
+};
+
+/** Renders the **bold** markers used in the booklet's answer keys. */
+const RichText: React.FC<{ text: string }> = ({ text }) => (
+    <>
+        {text
+            .split('**')
+            .map((part, i) =>
+                i % 2 === 1 ? (
+                    <strong key={i}>{part}</strong>
+                ) : (
+                    <React.Fragment key={i}>{part}</React.Fragment>
+                ),
+            )}
+    </>
+);
+
+const RevisionsTab: React.FC<{ student: SchoolStudent }> = ({ student }) => {
+    const { t } = useTranslation();
+    const { showToast } = useToast();
+    const [subject, setSubject] = useState<SchoolSubject | 'all'>('all');
+    const [status, setStatus] = useState<SchoolRevisionStatus | 'all'>('all');
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [dialog, setDialog] = useState<{ open: boolean; sheet: SchoolRevisionSheet | null }>({
+        open: false,
+        sheet: null,
+    });
+    const [bookletOpen, setBookletOpen] = useState(false);
+    const [printOpen, setPrintOpen] = useState(false);
+    const [withAnswers, setWithAnswers] = useState(true);
+    // Set only for the instant it takes the browser to render the pages.
+    const [printJob, setPrintJob] = useState<SchoolRevisionSheet[] | null>(null);
+
+    const sheetsQuery = useSchoolRevisionSheets({
+        student_id: student.id,
+        subject: subject === 'all' ? undefined : subject,
+        status: status === 'all' ? undefined : status,
+    });
+    const updateMut = useUpdateRevisionSheet();
+    const deleteMut = useDeleteRevisionSheet();
+    const markPrintedMut = useMarkRevisionSheetsPrinted();
+
+    const sheets = useMemo(() => sheetsQuery.data ?? [], [sheetsQuery.data]);
+
+    // A sheet filtered out of the list must not stay silently selected, or the
+    // user prints something they can no longer see.
+    useEffect(() => {
+        setSelected((prev) => {
+            const visible = new Set(sheets.map((s) => s.id));
+            const next = new Set([...prev].filter((id) => visible.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [sheets]);
+
+    // window.print() blocks the thread, so it must run AFTER React has painted
+    // #print-root — hence the deferred timeout rather than a direct call.
+    useEffect(() => {
+        if (!printJob) return;
+        const ids = printJob.map((s) => s.id);
+        const timer = window.setTimeout(() => {
+            window.print();
+            markPrintedMut.mutateAsync(ids).catch(() => undefined);
+            setPrintJob(null);
+        }, 80);
+        return () => window.clearTimeout(timer);
+        // markPrintedMut is recreated on every render; depending on it would
+        // reschedule the print on each one.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [printJob]);
+
+    const toggle = (id: string) =>
+        setSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+
+    const selectedSheets = sheets.filter((s) => selected.has(s.id));
+    const selectedMinutes = selectedSheets.reduce((sum, s) => sum + s.duration_minutes, 0);
+
+    const setStatusOf = async (sheet: SchoolRevisionSheet, next: SchoolRevisionStatus) => {
+        await updateMut
+            .mutateAsync({ id: sheet.id, patch: { status: next } })
+            .catch(() => undefined);
+    };
+
+    const remove = async (sheet: SchoolRevisionSheet) => {
+        if (!window.confirm(t('school.revisions.deleteConfirm'))) return;
+        await deleteMut.mutateAsync(sheet.id).catch(() => undefined);
+    };
+
+    const startPrint = () => {
+        if (selectedSheets.length === 0) return;
+        setPrintOpen(false);
+        setPrintJob(selectedSheets);
+        showToast({ title: t('school.revisions.printToast', { count: selectedSheets.length }) });
+    };
+
+    return (
+        <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="w-[190px]">
+                    <Select
+                        value={subject}
+                        onValueChange={(v) => setSubject(v as SchoolSubject | 'all')}
+                        options={[
+                            { value: 'all', label: t('school.revisions.allSubjects') },
+                            ...SCHOOL_SUBJECTS.map((s) => ({
+                                value: s,
+                                label: t(`school.subjects.${s}`),
+                            })),
+                        ]}
+                    />
+                </div>
+                <div className="w-[160px]">
+                    <Select
+                        value={status}
+                        onValueChange={(v) => setStatus(v as SchoolRevisionStatus | 'all')}
+                        options={[
+                            { value: 'all', label: t('school.common.all') },
+                            ...SCHOOL_REVISION_STATUSES.map((s) => ({
+                                value: s,
+                                label: t(`school.revisionStatuses.${s}`),
+                            })),
+                        ]}
+                    />
+                </div>
+                <div className="flex-1" />
+                <Button variant="secondary" onClick={() => setBookletOpen(true)}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {t('school.revisions.importBooklet')}
+                </Button>
+                <Button onClick={() => setDialog({ open: true, sheet: null })}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('school.revisions.add')}
+                </Button>
+            </div>
+
+            {sheetsQuery.isError && <ErrorBanner message={t('school.common.error')} />}
+
+            {sheets.length === 0 ? (
+                <EmptyState
+                    icon={<Printer className="h-8 w-8" />}
+                    title={t('school.revisions.empty')}
+                    description={t('school.revisions.emptyHint')}
+                    actionLabel={t('school.revisions.importBooklet')}
+                    onAction={() => setBookletOpen(true)}
+                />
+            ) : (
+                <>
+                    <Card hover={false}>
+                        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <label className="flex items-center gap-2 text-caption">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 accent-[hsl(var(--primary))]"
+                                        checked={
+                                            selected.size > 0 && selected.size === sheets.length
+                                        }
+                                        onChange={(e) =>
+                                            setSelected(
+                                                e.target.checked
+                                                    ? new Set(sheets.map((s) => s.id))
+                                                    : new Set(),
+                                            )
+                                        }
+                                    />
+                                    {t('school.revisions.selectAll')}
+                                </label>
+                                <span className="text-micro text-muted-foreground">
+                                    {t('school.revisions.selectionSummary', {
+                                        count: selected.size,
+                                        minutes: selectedMinutes,
+                                    })}
+                                </span>
+                            </div>
+                            <Button
+                                disabled={selected.size === 0}
+                                onClick={() => setPrintOpen(true)}
+                            >
+                                <Printer className="mr-2 h-4 w-4" />
+                                {t('school.revisions.print')}
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    <div className="space-y-2">
+                        {sheets.map((s) => (
+                            <Card hover={false} key={s.id}>
+                                <CardContent className="flex flex-wrap items-start gap-3 p-4">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-1 h-5 w-5 flex-shrink-0 accent-[hsl(var(--primary))]"
+                                        checked={selected.has(s.id)}
+                                        onChange={() => toggle(s.id)}
+                                        aria-label={s.title}
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-caption font-medium">
+                                                {s.title}
+                                            </span>
+                                            <Badge variant="primary">
+                                                {t(`school.subjects.${s.subject}`)}
+                                            </Badge>
+                                            <Badge variant={SHEET_TONE[s.sheet_type]}>
+                                                {t(`school.sheetTypes.${s.sheet_type}`)}
+                                            </Badge>
+                                            {s.status !== 'À faire' && (
+                                                <Badge variant={REVISION_TONE[s.status]}>
+                                                    {t(`school.revisionStatuses.${s.status}`)}
+                                                </Badge>
+                                            )}
+                                            {s.printed_at && (
+                                                <Badge variant="secondary">
+                                                    <Printer className="mr-1 h-3 w-3" />
+                                                    {t('school.revisions.printed')}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <p className="mt-1 text-micro text-muted-foreground">
+                                            {[
+                                                s.topic,
+                                                `${s.duration_minutes} ${t('school.common.minutes')}`,
+                                                t('school.revisions.exerciseCount', {
+                                                    count: s.exercises.length,
+                                                }),
+                                            ]
+                                                .filter(Boolean)
+                                                .join(' · ')}
+                                        </p>
+                                        {s.focus_warmup && (
+                                            <p className="mt-1 flex items-start gap-1 text-micro italic text-muted-foreground">
+                                                <Target className="mt-0.5 h-3 w-3 flex-shrink-0" />
+                                                {s.focus_warmup}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-shrink-0 gap-1">
+                                        {s.status === 'Faite' ? (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                aria-label={t('school.revisions.reopen')}
+                                                onClick={() => setStatusOf(s, 'À faire')}
+                                            >
+                                                <RotateCcw className="h-4 w-4" />
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                variant="secondary"
+                                                onClick={() => setStatusOf(s, 'Faite')}
+                                            >
+                                                {t('school.revisions.markDone')}
+                                            </Button>
+                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label={t('school.common.edit')}
+                                            onClick={() => setDialog({ open: true, sheet: s })}
+                                        >
+                                            <Pencil className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label={t('school.common.delete')}
+                                            className="text-destructive"
+                                            onClick={() => remove(s)}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                </>
+            )}
+
+            <Dialog
+                open={printOpen}
+                onOpenChange={(next) => !next && setPrintOpen(false)}
+                title={t('school.revisions.printTitle')}
+                description={t('school.revisions.printHint')}
+            >
+                <div className="space-y-4 px-5 py-4 md:px-6">
+                    <p className="text-caption text-muted-foreground">
+                        {t('school.revisions.printSummary', {
+                            count: selectedSheets.length,
+                            minutes: selectedMinutes,
+                        })}
+                    </p>
+                    <label className="flex items-start gap-2 text-caption">
+                        <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]"
+                            checked={withAnswers}
+                            onChange={(e) => setWithAnswers(e.target.checked)}
+                        />
+                        <span>
+                            {t('school.revisions.withAnswers')}
+                            <span className="block text-micro text-muted-foreground">
+                                {t('school.revisions.withAnswersHint')}
+                            </span>
+                        </span>
+                    </label>
+                </div>
+                <div className="flex justify-end gap-2 border-t border-border px-5 py-4 md:px-6">
+                    <Button variant="secondary" onClick={() => setPrintOpen(false)}>
+                        {t('school.common.cancel')}
+                    </Button>
+                    <Button onClick={startPrint} disabled={selectedSheets.length === 0}>
+                        <Printer className="mr-2 h-4 w-4" />
+                        {t('school.revisions.print')}
+                    </Button>
+                </div>
+            </Dialog>
+
+            <RevisionSheetDialog
+                open={dialog.open}
+                sheet={dialog.sheet}
+                studentId={student.id}
+                onClose={() => setDialog({ open: false, sheet: null })}
+            />
+            <BookletDialog
+                open={bookletOpen}
+                studentId={student.id}
+                onClose={() => setBookletOpen(false)}
+            />
+
+            {printJob && (
+                <RevisionPrintDoc sheets={printJob} student={student} withAnswers={withAnswers} />
+            )}
+        </div>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// The printed document
+// ---------------------------------------------------------------------------
+
+// Inline styles rather than Tailwind classes: the print stylesheet resets fonts
+// and colours, and mm/pt units are the only ones that behave identically across
+// browsers on paper.
+const PRINT = {
+    page: { padding: '0', pageBreakInside: 'avoid' } as React.CSSProperties,
+    idLine: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: '9.5pt',
+        letterSpacing: '0.02em',
+        marginBottom: '6mm',
+    } as React.CSSProperties,
+    kicker: {
+        fontSize: '9pt',
+        textTransform: 'uppercase',
+        letterSpacing: '0.12em',
+        marginBottom: '1.5mm',
+    } as React.CSSProperties,
+    title: {
+        fontSize: '20pt',
+        fontWeight: 700,
+        lineHeight: 1.15,
+        margin: '0 0 1.5mm',
+    } as React.CSSProperties,
+    topic: { fontSize: '10pt', fontStyle: 'italic', margin: '0 0 5mm' } as React.CSSProperties,
+    blockTitle: {
+        fontSize: '10pt',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        margin: '0 0 1.5mm',
+    } as React.CSSProperties,
+    box: { padding: '4mm 5mm', margin: '0 0 5mm' } as React.CSSProperties,
+    exercise: { margin: '0 0 5mm' } as React.CSSProperties,
+    hint: { fontSize: '9.5pt', fontStyle: 'italic', margin: '1mm 0 0' } as React.CSSProperties,
+    footer: { marginTop: '6mm', paddingTop: '3mm', fontSize: '10pt' } as React.CSSProperties,
+};
+
+const WritingLines: React.FC<{ count: number }> = ({ count }) => (
+    <div style={{ marginTop: '2mm' }}>
+        {Array.from({ length: count }, (_, i) => (
+            <div key={i} className="print-write-line" />
+        ))}
+    </div>
+);
+
+const PrintedSheet: React.FC<{
+    sheet: SchoolRevisionSheet;
+    student: SchoolStudent;
+    subjectLabel: string;
+    typeLabel: string;
+    t: (key: string, opts?: Record<string, unknown>) => string;
+}> = ({ sheet, student, subjectLabel, typeLabel, t }) => (
+    <section className="print-page" style={PRINT.page}>
+        <div className="print-rule" style={PRINT.idLine}>
+            <span>
+                {t('school.revisions.printNameField')} {student.name}
+            </span>
+            <span>{t('school.revisions.printDateField')} ______________________</span>
+        </div>
+
+        <p style={PRINT.kicker}>
+            {subjectLabel} · {typeLabel} · {sheet.duration_minutes} {t('school.common.minutes')}
+        </p>
+        <h1 style={PRINT.title}>{sheet.title}</h1>
+        {sheet.topic && (
+            <p style={PRINT.topic}>
+                {t('school.revisions.printTopic')} {sheet.topic}
+            </p>
+        )}
+
+        {sheet.focus_warmup && (
+            <div className="print-dashed print-avoid-break" style={PRINT.box}>
+                <p style={PRINT.blockTitle}>{t('school.revisions.printWarmup')}</p>
+                <p style={{ margin: 0 }}>{sheet.focus_warmup}</p>
+            </div>
+        )}
+
+        {sheet.instructions && (
+            <div className="print-avoid-break" style={{ margin: '0 0 5mm' }}>
+                <p style={PRINT.blockTitle}>{t('school.revisions.printInstructions')}</p>
+                <p style={{ margin: 0 }}>{sheet.instructions}</p>
+            </div>
+        )}
+
+        <ol style={{ margin: 0, paddingLeft: '6mm' }}>
+            {sheet.exercises.map((ex, i) => (
+                <li key={i} className="print-avoid-break" style={PRINT.exercise}>
+                    <span>{ex.prompt}</span>
+                    {ex.hint && (
+                        <p style={PRINT.hint}>
+                            {t('school.revisions.printHintLabel')} {ex.hint}
+                        </p>
+                    )}
+                    <WritingLines count={ex.answer_lines ?? 2} />
+                </li>
+            ))}
+        </ol>
+
+        <div className="print-rule print-avoid-break" style={PRINT.footer}>
+            <p style={{ margin: '0 0 2mm' }}>{t('school.revisions.printSelfEval')}</p>
+            <p style={{ margin: 0 }}>{t('school.revisions.printToReview')} ____________________</p>
+        </div>
+    </section>
+);
+
+const RevisionPrintDoc: React.FC<{
+    sheets: SchoolRevisionSheet[];
+    student: SchoolStudent;
+    withAnswers: boolean;
+}> = ({ sheets, student, withAnswers }) => {
+    const { t } = useTranslation();
+    const answered = sheets.filter((s) => s.exercises.some((e) => e.answer));
+
+    return createPortal(
+        <div id="print-root">
+            {sheets.map((sheet) => (
+                <PrintedSheet
+                    key={sheet.id}
+                    sheet={sheet}
+                    student={student}
+                    subjectLabel={t(`school.subjects.${sheet.subject}`)}
+                    typeLabel={t(`school.sheetTypes.${sheet.sheet_type}`)}
+                    t={t}
+                />
+            ))}
+
+            {withAnswers && answered.length > 0 && (
+                <section className="print-page" style={PRINT.page}>
+                    <p style={PRINT.kicker}>{t('school.revisions.printAnswerKicker')}</p>
+                    <h1 style={PRINT.title}>{t('school.revisions.printAnswerTitle')}</h1>
+                    <p style={PRINT.topic}>{t('school.revisions.printAnswerHint')}</p>
+                    {answered.map((sheet) => (
+                        <div
+                            key={sheet.id}
+                            className="print-avoid-break"
+                            style={{ margin: '0 0 6mm' }}
+                        >
+                            <p style={PRINT.blockTitle}>
+                                {t(`school.subjects.${sheet.subject}`)} — {sheet.title}
+                            </p>
+                            <ol style={{ margin: 0, paddingLeft: '6mm' }}>
+                                {sheet.exercises.map((ex, i) => (
+                                    <li key={i} style={{ marginBottom: '1.5mm' }}>
+                                        {ex.answer ? (
+                                            <RichText text={ex.answer} />
+                                        ) : (
+                                            <em>{t('school.revisions.printNoAnswer')}</em>
+                                        )}
+                                    </li>
+                                ))}
+                            </ol>
+                        </div>
+                    ))}
+                </section>
+            )}
+        </div>,
+        document.body,
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Revision sheet dialog
+// ---------------------------------------------------------------------------
+
+const emptyExercise = (): RevisionExercise => ({ prompt: '', answer_lines: 2 });
+
+const RevisionSheetDialog: React.FC<{
+    open: boolean;
+    sheet: SchoolRevisionSheet | null;
+    studentId: string;
+    onClose: () => void;
+}> = ({ open, sheet, studentId, onClose }) => {
+    const { t } = useTranslation();
+    const subjectOptions = useSubjectOptions();
+    const createMut = useCreateRevisionSheet();
+    const updateMut = useUpdateRevisionSheet();
+    const [error, setError] = useState('');
+    const [form, setForm] = useState({
+        subject: 'Mathématique' as SchoolSubject,
+        topic: '',
+        title: '',
+        sheet_type: 'Exercice' as SchoolSheetType,
+        duration_minutes: '20',
+        focus_warmup: '',
+        instructions: '',
+        source: '',
+        notes: '',
+    });
+    const [exercises, setExercises] = useState<RevisionExercise[]>([emptyExercise()]);
+
+    useEffect(() => {
+        if (!open) return;
+        setError('');
+        setForm({
+            subject: sheet?.subject ?? 'Mathématique',
+            topic: sheet?.topic ?? '',
+            title: sheet?.title ?? '',
+            sheet_type: sheet?.sheet_type ?? 'Exercice',
+            duration_minutes: String(sheet?.duration_minutes ?? 20),
+            focus_warmup: sheet?.focus_warmup ?? '',
+            instructions: sheet?.instructions ?? '',
+            source: sheet?.source ?? '',
+            notes: sheet?.notes ?? '',
+        });
+        setExercises(
+            sheet && sheet.exercises.length > 0
+                ? sheet.exercises.map((e) => ({ ...e }))
+                : [emptyExercise()],
+        );
+    }, [open, sheet]);
+
+    const updateExercise = (index: number, patch: Partial<RevisionExercise>) =>
+        setExercises((prev) => prev.map((e, i) => (i === index ? { ...e, ...patch } : e)));
+
+    const submit = async () => {
+        setError('');
+        // Blank rows are the natural residue of the editor — drop them rather
+        // than failing validation on a row the user never filled in.
+        const cleaned = exercises
+            .filter((e) => e.prompt.trim())
+            .map((e) => ({
+                prompt: e.prompt.trim(),
+                hint: e.hint?.trim() || null,
+                answer: e.answer?.trim() || null,
+                answer_lines: e.answer_lines ?? 2,
+            }));
+        const payload = {
+            subject: form.subject,
+            topic: form.topic.trim() || null,
+            title: form.title.trim(),
+            sheet_type: form.sheet_type,
+            duration_minutes: Math.min(240, Math.max(5, Number(form.duration_minutes) || 20)),
+            focus_warmup: form.focus_warmup.trim() || null,
+            instructions: form.instructions.trim() || null,
+            exercises: cleaned,
+            source: form.source.trim() || null,
+            notes: form.notes.trim() || null,
+        };
+        try {
+            if (sheet) {
+                await updateMut.mutateAsync({ id: sheet.id, patch: payload });
+            } else {
+                await createMut.mutateAsync({ ...payload, student_id: studentId });
+            }
+            onClose();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : t('school.common.genericError'));
+        }
+    };
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={(next) => !next && onClose()}
+            title={sheet ? t('school.revisions.edit') : t('school.revisions.add')}
+            className="sm:max-w-2xl"
+        >
+            <div className="space-y-4 px-5 py-4 md:px-6">
+                {error && <ErrorBanner message={error} />}
+                <Input
+                    label={t('school.revisions.title')}
+                    placeholder={t('school.revisions.titlePlaceholder')}
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div>
+                        <label className="mb-1.5 block text-caption font-medium text-foreground">
+                            {t('school.revisions.subject')}
+                        </label>
+                        <Select
+                            value={form.subject}
+                            onValueChange={(v) => setForm({ ...form, subject: v as SchoolSubject })}
+                            options={subjectOptions}
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1.5 block text-caption font-medium text-foreground">
+                            {t('school.revisions.sheetType')}
+                        </label>
+                        <Select
+                            value={form.sheet_type}
+                            onValueChange={(v) =>
+                                setForm({ ...form, sheet_type: v as SchoolSheetType })
+                            }
+                            options={SCHOOL_SHEET_TYPES.map((v) => ({
+                                value: v,
+                                label: t(`school.sheetTypes.${v}`),
+                            }))}
+                        />
+                    </div>
+                    <Input
+                        label={t('school.revisions.duration')}
+                        type="number"
+                        min={5}
+                        max={240}
+                        value={form.duration_minutes}
+                        onChange={(e) => setForm({ ...form, duration_minutes: e.target.value })}
+                    />
+                </div>
+                <Input
+                    label={t('school.revisions.topic')}
+                    placeholder={t('school.revisions.topicPlaceholder')}
+                    value={form.topic}
+                    onChange={(e) => setForm({ ...form, topic: e.target.value })}
+                />
+                <Textarea
+                    label={t('school.revisions.warmup')}
+                    placeholder={t('school.revisions.warmupPlaceholder')}
+                    value={form.focus_warmup}
+                    onChange={(e) => setForm({ ...form, focus_warmup: e.target.value })}
+                />
+                <Textarea
+                    label={t('school.revisions.instructions')}
+                    value={form.instructions}
+                    onChange={(e) => setForm({ ...form, instructions: e.target.value })}
+                />
+
+                <div>
+                    <SectionTitle
+                        action={
+                            <Button
+                                variant="secondary"
+                                onClick={() => setExercises((prev) => [...prev, emptyExercise()])}
+                                disabled={exercises.length >= 30}
+                            >
+                                <Plus className="mr-2 h-4 w-4" />
+                                {t('school.revisions.addExercise')}
+                            </Button>
+                        }
+                    >
+                        {t('school.revisions.exercises')}
+                    </SectionTitle>
+                    <div className="space-y-3">
+                        {exercises.map((ex, index) => (
+                            <div
+                                key={index}
+                                className="space-y-2 rounded-input border border-border p-3"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <span className="text-micro font-semibold text-muted-foreground">
+                                        {index + 1}.
+                                    </span>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label={t('school.common.delete')}
+                                        className="text-destructive"
+                                        onClick={() =>
+                                            setExercises((prev) =>
+                                                prev.filter((_, i) => i !== index),
+                                            )
+                                        }
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                <Textarea
+                                    label={t('school.revisions.exercisePrompt')}
+                                    value={ex.prompt}
+                                    onChange={(e) =>
+                                        updateExercise(index, { prompt: e.target.value })
+                                    }
+                                />
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                    <Input
+                                        label={t('school.revisions.exerciseHint')}
+                                        value={ex.hint ?? ''}
+                                        onChange={(e) =>
+                                            updateExercise(index, { hint: e.target.value })
+                                        }
+                                    />
+                                    <Input
+                                        label={t('school.revisions.exerciseLines')}
+                                        type="number"
+                                        min={0}
+                                        max={20}
+                                        value={String(ex.answer_lines ?? 2)}
+                                        onChange={(e) =>
+                                            updateExercise(index, {
+                                                answer_lines: Math.min(
+                                                    20,
+                                                    Math.max(0, Number(e.target.value) || 0),
+                                                ),
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <Input
+                                    label={t('school.revisions.exerciseAnswer')}
+                                    placeholder={t('school.revisions.exerciseAnswerPlaceholder')}
+                                    value={ex.answer ?? ''}
+                                    onChange={(e) =>
+                                        updateExercise(index, { answer: e.target.value })
+                                    }
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <Input
+                    label={t('school.revisions.source')}
+                    placeholder={t('school.revisions.sourcePlaceholder')}
+                    value={form.source}
+                    onChange={(e) => setForm({ ...form, source: e.target.value })}
+                />
+                <Textarea
+                    label={t('school.revisions.notes')}
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                />
+            </div>
+            <div className="flex justify-end gap-2 border-t border-border px-5 py-4 md:px-6">
+                <Button variant="secondary" onClick={onClose}>
+                    {t('school.common.cancel')}
+                </Button>
+                <Button
+                    onClick={submit}
+                    disabled={!form.title.trim() || createMut.isPending || updateMut.isPending}
+                >
+                    {t('school.common.save')}
+                </Button>
+            </div>
+        </Dialog>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Booklet import dialog
+// ---------------------------------------------------------------------------
+
+const BookletDialog: React.FC<{ open: boolean; studentId: string; onClose: () => void }> = ({
+    open,
+    studentId,
+    onClose,
+}) => {
+    const { t } = useTranslation();
+    const { showToast } = useToast();
+    const bookletsQuery = useRevisionBooklets();
+    const applyMut = useApplyRevisionBooklet();
+    const [selectedId, setSelectedId] = useState('');
+    const [subjects, setSubjects] = useState<SchoolSubject[]>([]);
+    const [error, setError] = useState('');
+
+    const booklets = useMemo(() => bookletsQuery.data ?? [], [bookletsQuery.data]);
+    const booklet = booklets.find((b) => b.id === selectedId) ?? booklets[0] ?? null;
+
+    // Default to importing the whole booklet; re-seed whenever the choice moves.
+    useEffect(() => {
+        if (!open || !booklet) return;
+        setSelectedId((prev) => prev || booklet.id);
+        setSubjects(booklet.subjects);
+    }, [open, booklet]);
+
+    const toggleSubject = (subject: SchoolSubject) =>
+        setSubjects((prev) =>
+            prev.includes(subject) ? prev.filter((s) => s !== subject) : [...prev, subject],
+        );
+
+    const apply = async () => {
+        if (!booklet) return;
+        setError('');
+        try {
+            const result = await applyMut.mutateAsync({
+                bookletId: booklet.id,
+                student_id: studentId,
+                // Sending every subject is the same as sending none; omitting
+                // the field keeps the request honest about "everything".
+                subjects: subjects.length === booklet.subjects.length ? undefined : subjects,
+            });
+            showToast({
+                title: t('school.revisions.bookletResult', { count: result.sheets_created }),
+                description:
+                    result.sheets_skipped > 0
+                        ? t('school.revisions.bookletSkipped', { count: result.sheets_skipped })
+                        : undefined,
+            });
+            onClose();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : t('school.common.genericError'));
+        }
+    };
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={(next) => !next && onClose()}
+            title={t('school.revisions.bookletTitle')}
+            description={t('school.revisions.bookletDescription')}
+        >
+            <div className="space-y-4 px-5 py-4 md:px-6">
+                {error && <ErrorBanner message={error} />}
+                {booklets.length === 0 ? (
+                    <p className="text-caption text-muted-foreground">
+                        {t('school.revisions.bookletEmpty')}
+                    </p>
+                ) : (
+                    <>
+                        <Select
+                            value={booklet?.id ?? ''}
+                            onValueChange={setSelectedId}
+                            options={booklets.map((b) => ({ value: b.id, label: b.label }))}
+                        />
+                        {booklet && (
+                            <>
+                                <p className="text-caption text-muted-foreground">
+                                    {booklet.description}
+                                </p>
+                                <p className="text-micro text-muted-foreground">
+                                    {t('school.revisions.bookletMeta', {
+                                        count: booklet.sheets_count,
+                                        minutes: booklet.total_minutes,
+                                    })}
+                                </p>
+                                <div>
+                                    <p className="mb-2 text-caption font-medium">
+                                        {t('school.revisions.bookletSubjects')}
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {booklet.subjects.map((s) => (
+                                            <label
+                                                key={s}
+                                                className="flex items-center gap-2 rounded-input border border-border px-3 py-1.5 text-caption"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 accent-[hsl(var(--primary))]"
+                                                    checked={subjects.includes(s)}
+                                                    onChange={() => toggleSubject(s)}
+                                                />
+                                                {t(`school.subjects.${s}`)}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="rounded-input border border-warning/30 bg-warning/10 px-4 py-3 text-micro text-warning">
+                                    <p className="mb-1 font-semibold">
+                                        {t('school.presets.caveatTitle')}
+                                    </p>
+                                    {booklet.caveat}
+                                </div>
+                            </>
+                        )}
+                    </>
+                )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-border px-5 py-4 md:px-6">
+                <Button variant="secondary" onClick={onClose}>
+                    {t('school.common.cancel')}
+                </Button>
+                <Button
+                    onClick={apply}
+                    disabled={!booklet || subjects.length === 0 || applyMut.isPending}
+                >
+                    {applyMut.isPending
+                        ? t('school.revisions.bookletApplying')
+                        : t('school.revisions.bookletApply')}
                 </Button>
             </div>
         </Dialog>

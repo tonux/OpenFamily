@@ -54,6 +54,12 @@ export type SchoolSubject = (typeof SCHOOL_SUBJECTS)[number];
 export const SCHOOL_STUDY_STATUSES = ['Planifiée', 'Faite', 'Manquée'] as const;
 export type SchoolStudyStatus = (typeof SCHOOL_STUDY_STATUSES)[number];
 
+export const SCHOOL_SHEET_TYPES = ['Jeu', 'Défi', 'Énigme', 'Exercice', 'Quiz', 'Projet'] as const;
+export type SchoolSheetType = (typeof SCHOOL_SHEET_TYPES)[number];
+
+export const SCHOOL_REVISION_STATUSES = ['À faire', 'Faite', 'À revoir'] as const;
+export type SchoolRevisionStatus = (typeof SCHOOL_REVISION_STATUSES)[number];
+
 /**
  * Which event types mean "no class today". Used by the calendar to grey out the
  * day and by the planner to explain why a slot was skipped.
@@ -171,6 +177,55 @@ export interface SchoolStatistics {
         minutes_done_7d: number;
     };
     by_subject: SchoolSubjectInsight[];
+}
+
+export interface RevisionExercise {
+    prompt: string;
+    hint?: string | null;
+    /** The corrigé. Printed on its own page, never on the child's sheet. */
+    answer?: string | null;
+    /** Blank ruled lines to print under the question. */
+    answer_lines?: number | null;
+}
+
+export interface SchoolRevisionSheet {
+    id: string;
+    student_id: string;
+    subject: SchoolSubject;
+    topic?: string | null;
+    title: string;
+    sheet_type: SchoolSheetType;
+    duration_minutes: number;
+    focus_warmup?: string | null;
+    instructions?: string | null;
+    exercises: RevisionExercise[];
+    status: SchoolRevisionStatus;
+    mastery?: number | null;
+    completed_at?: string | null;
+    printed_at?: string | null;
+    source?: string | null;
+    notes?: string | null;
+    position: number;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface RevisionBooklet {
+    id: string;
+    label: string;
+    description: string;
+    grade_level: string;
+    caveat: string;
+    sheets_count: number;
+    subjects: SchoolSubject[];
+    total_minutes: number;
+}
+
+export interface RevisionBookletApplyResult {
+    booklet_id: string;
+    sheets_created: number;
+    sheets_skipped: number;
+    caveat: string;
 }
 
 export interface SchoolPreset {
@@ -291,6 +346,36 @@ export const useSchoolStatistics = (studentId?: string) =>
             return r.data;
         },
         staleTime: 60_000,
+    });
+
+export const useSchoolRevisionSheets = (filters?: {
+    student_id?: string;
+    subject?: SchoolSubject;
+    sheet_type?: SchoolSheetType;
+    status?: SchoolRevisionStatus | 'all';
+    q?: string;
+}) =>
+    useQuery({
+        queryKey: queryKeys.school.revisionSheets(filters),
+        queryFn: async () => {
+            const r = await api.get<{ success: boolean; data: SchoolRevisionSheet[] }>(
+                `/api/school/revision-sheets${toQuery(filters)}`,
+            );
+            return r.data;
+        },
+    });
+
+export const useRevisionBooklets = () =>
+    useQuery({
+        queryKey: queryKeys.school.revisionBooklets(),
+        queryFn: async () => {
+            const r = await api.get<{ success: boolean; data: RevisionBooklet[] }>(
+                '/api/school/revision-booklets',
+            );
+            return r.data;
+        },
+        // Booklets ship in the bundle, not user data — no need to refetch.
+        staleTime: Infinity,
     });
 
 export const useSchoolPresets = () =>
@@ -640,6 +725,106 @@ export const useDeleteSchoolGrade = () => {
         mutationFn: async (id: string) => {
             await api.delete<{ success: boolean }>(`/api/school/grades/${id}`);
             return id;
+        },
+        onSuccess: () => invalidateSchool(qc),
+    });
+};
+
+// Revision sheets
+
+export type RevisionSheetInput = {
+    student_id: string;
+    subject: SchoolSubject;
+    title: string;
+    topic?: string | null;
+    sheet_type?: SchoolSheetType;
+    duration_minutes?: number;
+    focus_warmup?: string | null;
+    instructions?: string | null;
+    exercises?: RevisionExercise[];
+    status?: SchoolRevisionStatus;
+    mastery?: number | null;
+    source?: string | null;
+    notes?: string | null;
+};
+
+export const useCreateRevisionSheet = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (body: RevisionSheetInput) => {
+            const r = await api.post<{ success: boolean; data: SchoolRevisionSheet }>(
+                '/api/school/revision-sheets',
+                body,
+            );
+            return r.data;
+        },
+        onSuccess: () => invalidateSchool(qc),
+    });
+};
+
+export const useUpdateRevisionSheet = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async ({
+            id,
+            patch,
+        }: {
+            id: string;
+            patch: Partial<Omit<RevisionSheetInput, 'student_id'>>;
+        }) => {
+            const r = await api.patch<{ success: boolean; data: SchoolRevisionSheet }>(
+                `/api/school/revision-sheets/${id}`,
+                patch,
+            );
+            return r.data;
+        },
+        onSuccess: () => invalidateSchool(qc),
+    });
+};
+
+export const useDeleteRevisionSheet = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (id: string) => {
+            await api.delete<{ success: boolean }>(`/api/school/revision-sheets/${id}`);
+            return id;
+        },
+        onSuccess: () => invalidateSchool(qc),
+    });
+};
+
+/** Stamps printed_at on the batch the user just sent to the printer. */
+export const useMarkRevisionSheetsPrinted = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (ids: string[]) => {
+            const r = await api.post<{ success: boolean; data: { marked: number } }>(
+                '/api/school/revision-sheets/mark-printed',
+                { ids },
+            );
+            return r.data;
+        },
+        onSuccess: () => invalidateSchool(qc),
+    });
+};
+
+export const useApplyRevisionBooklet = () => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async ({
+            bookletId,
+            student_id,
+            subjects,
+        }: {
+            bookletId: string;
+            student_id: string;
+            subjects?: SchoolSubject[];
+        }) => {
+            const r = await api.post<{ success: boolean; data: RevisionBookletApplyResult }>(
+                `/api/school/revision-booklets/${bookletId}/apply`,
+                { student_id, ...(subjects ? { subjects } : {}) },
+            );
+            return r.data;
         },
         onSuccess: () => invalidateSchool(qc),
     });

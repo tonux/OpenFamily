@@ -54,6 +54,13 @@ export type SchoolSubject = (typeof SCHOOL_SUBJECTS)[number];
 export const SCHOOL_STUDY_STATUSES = ['Planifiée', 'Faite', 'Manquée'] as const;
 export type SchoolStudyStatus = (typeof SCHOOL_STUDY_STATUSES)[number];
 
+/** How a revision sheet is framed on paper. Drives the icon and the tone. */
+export const SCHOOL_SHEET_TYPES = ['Jeu', 'Défi', 'Énigme', 'Exercice', 'Quiz', 'Projet'] as const;
+export type SchoolSheetType = (typeof SCHOOL_SHEET_TYPES)[number];
+
+export const SCHOOL_REVISION_STATUSES = ['À faire', 'Faite', 'À revoir'] as const;
+export type SchoolRevisionStatus = (typeof SCHOOL_REVISION_STATUSES)[number];
+
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'Expected YYYY-MM-DD' });
 const isoTime = z.string().regex(/^\d{2}:\d{2}$/, { message: 'Expected HH:MM' });
 
@@ -338,6 +345,90 @@ export const gradeListQuerySchema = z
     })
     .strict();
 
+// ---------- Revision sheets ----------
+
+/**
+ * One exercise on a printed sheet. `answer` feeds the corrigé page (printed
+ * separately so the child never sees it), `answer_lines` is how many blank
+ * ruled lines to leave under the question.
+ */
+export const revisionExerciseSchema = z
+    .object({
+        prompt: z.string().trim().min(1).max(1000),
+        hint: optionalString(300),
+        answer: optionalString(1000),
+        answer_lines: z.number().int().min(0).max(20).optional(),
+    })
+    .strict();
+
+const revisionExercises = z.array(revisionExerciseSchema).max(30);
+
+export const revisionSheetBodySchema = z
+    .object({
+        student_id: z.string().uuid(),
+        subject: z.enum(SCHOOL_SUBJECTS),
+        topic: optionalString(160),
+        title: z.string().trim().min(1).max(160),
+        sheet_type: z.enum(SCHOOL_SHEET_TYPES).optional(),
+        duration_minutes: z.number().int().min(5).max(240).optional(),
+        focus_warmup: optionalString(2000),
+        instructions: optionalString(2000),
+        exercises: revisionExercises.optional(),
+        status: z.enum(SCHOOL_REVISION_STATUSES).optional(),
+        mastery: optionalNullable(z.number().int().min(1).max(5)),
+        source: optionalString(300),
+        notes: optionalString(2000),
+        position: z.number().int().min(0).max(10_000).optional(),
+    })
+    .strict();
+
+export const revisionSheetPatchSchema = z
+    .object({
+        subject: z.enum(SCHOOL_SUBJECTS).optional(),
+        topic: optionalString(160).optional(),
+        title: z.string().trim().min(1).max(160).optional(),
+        sheet_type: z.enum(SCHOOL_SHEET_TYPES).optional(),
+        duration_minutes: z.number().int().min(5).max(240).optional(),
+        focus_warmup: optionalString(2000).optional(),
+        instructions: optionalString(2000).optional(),
+        exercises: revisionExercises.optional(),
+        status: z.enum(SCHOOL_REVISION_STATUSES).optional(),
+        mastery: optionalNullable(z.number().int().min(1).max(5)).optional(),
+        source: optionalString(300).optional(),
+        notes: optionalString(2000).optional(),
+        position: z.number().int().min(0).max(10_000).optional(),
+    })
+    .strict()
+    .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+
+export const revisionSheetListQuerySchema = z
+    .object({
+        student_id: z.string().uuid().optional(),
+        subject: z.enum(SCHOOL_SUBJECTS).optional(),
+        sheet_type: z.enum(SCHOOL_SHEET_TYPES).optional(),
+        status: z.enum([...SCHOOL_REVISION_STATUSES, 'all']).optional(),
+        q: z.string().trim().min(1).max(120).optional(),
+    })
+    .strict();
+
+/** Stamps printed_at on a batch, after the browser's print dialog was opened. */
+export const revisionMarkPrintedSchema = z
+    .object({
+        ids: z.array(z.string().uuid()).min(1).max(200),
+    })
+    .strict();
+
+/**
+ * Import a ready-made revision booklet onto a student. `subjects` narrows the
+ * import to a few matières; omitted means everything in the booklet.
+ */
+export const revisionCatalogApplySchema = z
+    .object({
+        student_id: z.string().uuid(),
+        subjects: z.array(z.enum(SCHOOL_SUBJECTS)).min(1).max(SCHOOL_SUBJECTS.length).optional(),
+    })
+    .strict();
+
 // ---------- Presets ----------
 
 export const presetApplySchema = z
@@ -366,3 +457,6 @@ export type StudySessionPatch = z.infer<typeof studySessionPatchSchema>;
 export type StudyPlanBody = z.infer<typeof studyPlanSchema>;
 export type GradeBody = z.infer<typeof gradeBodySchema>;
 export type GradePatch = z.infer<typeof gradePatchSchema>;
+export type RevisionExercise = z.infer<typeof revisionExerciseSchema>;
+export type RevisionSheetBody = z.infer<typeof revisionSheetBodySchema>;
+export type RevisionSheetPatch = z.infer<typeof revisionSheetPatchSchema>;

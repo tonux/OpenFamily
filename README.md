@@ -15,7 +15,7 @@ KeurTonux est une application de gestion familiale complète proposée en open s
 - 💰 **Budget** - Suivi mensuel, navigation par mois, limites par catégorie, dépenses par membre, statistiques avancées
 - 👨‍👩‍👧‍👦 **Famille** - Profils membres, informations santé, contacts d'urgence
 - 🏠 **Maison** - Suivi des équipements et des opérations de maintenance
-- 🎓 **École** - Calendrier scolaire avec rappels e-mail la veille, checklist d'achat des fournitures (cahiers + ISBN), planning d'étude à la maison et suivi des résultats par matière
+- 🎓 **École** - Calendrier scolaire avec rappels e-mail la veille, checklist d'achat des fournitures (cahiers + ISBN), planning d'étude à la maison, fiches de révision à imprimer (carnets prêts à l'emploi, rituel de concentration, corrigés sur page à part) et suivi des résultats par matière
 - 🏖️ **Vacances** - Planification de voyages et gestion des bagages
 - 📄 **Documents** - Stockage et organisation de documents familiaux (stockage objet MinIO/S3)
 

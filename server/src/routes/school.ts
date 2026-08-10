@@ -10,6 +10,11 @@ import {
     gradeListQuerySchema,
     gradePatchSchema,
     presetApplySchema,
+    revisionCatalogApplySchema,
+    revisionMarkPrintedSchema,
+    revisionSheetBodySchema,
+    revisionSheetListQuerySchema,
+    revisionSheetPatchSchema,
     statisticsQuerySchema,
     studentBodySchema,
     studentListQuerySchema,
@@ -25,6 +30,7 @@ import {
 } from '../schemas/school';
 import { toDateKeyLoose } from '../lib/dayContext';
 import { findPreset, listPresets } from '../lib/schoolPresets';
+import { findBooklet, listBooklets } from '../lib/schoolRevisionCatalog';
 import logger from '../lib/logger';
 
 // =============================================================================
@@ -43,6 +49,12 @@ import logger from '../lib/logger';
 //   POST /presets/:id/apply       — import a bundle onto a student (idempotent)
 //   POST /study-sessions/plan     — generate N weeks from a weekly template
 //   PATCH /study-sessions/:id/complete — mark done, roll the recurrence forward
+//
+// Plus the printable side of the module:
+//   - school_revision_sheets      — one-page worksheets, printed from the client
+//   GET  /revision-booklets              — ready-made booklets per grade
+//   POST /revision-booklets/:id/apply    — import a booklet onto a student
+//   POST /revision-sheets/mark-printed   — stamp printed_at on a batch
 //
 // Reminders are NOT sent from here: rows carry reminder_enabled /
 // reminder_days_before, and the daily morning pulse in
@@ -201,6 +213,30 @@ const mapGrade = (row: any) => ({
     percentage: Math.round((Number(row.score) / Number(row.max_score)) * 1000) / 10,
     term: row.term ?? null,
     notes: row.notes ?? null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+});
+
+const mapRevisionSheet = (row: any) => ({
+    id: row.id as string,
+    student_id: row.student_id as string,
+    subject: row.subject as string,
+    topic: row.topic ?? null,
+    title: row.title as string,
+    sheet_type: row.sheet_type as string,
+    duration_minutes: Number(row.duration_minutes),
+    focus_warmup: row.focus_warmup ?? null,
+    instructions: row.instructions ?? null,
+    // pg hands JSONB back already parsed; the CHECK constraint guarantees an
+    // array, but a row written before it existed would still be defended here.
+    exercises: Array.isArray(row.exercises) ? row.exercises : [],
+    status: row.status as string,
+    mastery: row.mastery ?? null,
+    completed_at: row.completed_at ?? null,
+    printed_at: row.printed_at ?? null,
+    source: row.source ?? null,
+    notes: row.notes ?? null,
+    position: Number(row.position),
     created_at: row.created_at,
     updated_at: row.updated_at,
 });
@@ -960,6 +996,272 @@ router.delete('/grades/:id', async (req: AuthRequest, res) => {
         fail(res, 'delete_grade_failed', error);
     }
 });
+
+// ---------------------------------------------------------------------------
+// Revision sheets (the printable side)
+// ---------------------------------------------------------------------------
+
+router.get(
+    '/revision-sheets',
+    validate({ query: revisionSheetListQuerySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const { student_id, subject, sheet_type, status, q } = req.query as {
+                student_id?: string;
+                subject?: string;
+                sheet_type?: string;
+                status?: string;
+                q?: string;
+            };
+            const params: any[] = [req.userId];
+            let sql = 'SELECT * FROM school_revision_sheets WHERE user_id = $1';
+            if (student_id) {
+                params.push(student_id);
+                sql += ` AND student_id = $${params.length}`;
+            }
+            if (subject) {
+                params.push(subject);
+                sql += ` AND subject = $${params.length}`;
+            }
+            if (sheet_type) {
+                params.push(sheet_type);
+                sql += ` AND sheet_type = $${params.length}`;
+            }
+            if (status && status !== 'all') {
+                params.push(status);
+                sql += ` AND status = $${params.length}`;
+            }
+            if (q) {
+                params.push(`%${q}%`);
+                sql += ` AND (title ILIKE $${params.length} OR topic ILIKE $${params.length})`;
+            }
+            sql += ' ORDER BY position ASC, created_at ASC';
+            const r = await query(sql, params);
+            res.json({ success: true, data: r.rows.map(mapRevisionSheet) });
+        } catch (error) {
+            fail(res, 'list_revision_sheets_failed', error);
+        }
+    },
+);
+
+router.post(
+    '/revision-sheets',
+    validate({ body: revisionSheetBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const b = req.body;
+            await ensureStudent(b.student_id, req.userId!);
+            const r = await query(
+                `INSERT INTO school_revision_sheets
+                    (user_id, student_id, subject, topic, title, sheet_type, duration_minutes,
+                     focus_warmup, instructions, exercises, status, mastery, source, notes,
+                     position, completed_at)
+                 VALUES ($1,$2,$3,$4,$5,COALESCE($6,'Exercice'),COALESCE($7,20),$8,$9,
+                         COALESCE($10::jsonb,'[]'::jsonb),COALESCE($11,'À faire'),$12,$13,$14,
+                         COALESCE($15, (SELECT COALESCE(MAX(position),0)+1
+                                        FROM school_revision_sheets WHERE student_id = $2)),
+                         CASE WHEN $11 = 'Faite' THEN CURRENT_TIMESTAMP ELSE NULL END)
+                 RETURNING *`,
+                [
+                    req.userId,
+                    b.student_id,
+                    b.subject,
+                    b.topic ?? null,
+                    b.title,
+                    b.sheet_type ?? null,
+                    b.duration_minutes ?? null,
+                    b.focus_warmup ?? null,
+                    b.instructions ?? null,
+                    b.exercises ? JSON.stringify(b.exercises) : null,
+                    b.status ?? null,
+                    b.mastery ?? null,
+                    b.source ?? null,
+                    b.notes ?? null,
+                    b.position ?? null,
+                ],
+            );
+            res.status(201).json({ success: true, data: mapRevisionSheet(r.rows[0]) });
+        } catch (error) {
+            if (handleFkError(error, res)) return;
+            fail(res, 'create_revision_sheet_failed', error);
+        }
+    },
+);
+
+/**
+ * Stamps printed_at on a batch. Called right after the client opens the print
+ * dialog, so the list can show what is already on paper. Silently ignores ids
+ * that aren't the caller's — the count in the response is the truth.
+ */
+router.post(
+    '/revision-sheets/mark-printed',
+    validate({ body: revisionMarkPrintedSchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const r = await query(
+                `UPDATE school_revision_sheets SET printed_at = CURRENT_TIMESTAMP
+                 WHERE user_id = $1 AND id = ANY($2::uuid[])
+                 RETURNING id`,
+                [req.userId, req.body.ids],
+            );
+            res.json({ success: true, data: { marked: r.rows.length } });
+        } catch (error) {
+            fail(res, 'mark_printed_failed', error);
+        }
+    },
+);
+
+router.patch(
+    '/revision-sheets/:id',
+    validate({ body: revisionSheetPatchSchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const body = { ...req.body };
+            // Marking a sheet done stamps the date; moving it back out clears
+            // it, so "faite le…" never lies about a sheet that was reopened.
+            if (body.status !== undefined) {
+                body.completed_at = body.status === 'Faite' ? new Date() : null;
+            }
+            if (body.exercises !== undefined) {
+                body.exercises = JSON.stringify(body.exercises);
+            }
+            const { updates, values } = buildUpdate(body);
+            if (updates.length === 0) {
+                return res.status(400).json({ success: false, error: 'No fields to update' });
+            }
+            values.push(req.params.id, req.userId);
+            const r = await query(
+                `UPDATE school_revision_sheets SET ${updates.join(', ')}
+                 WHERE id = $${values.length - 1} AND user_id = $${values.length}
+                 RETURNING *`,
+                values,
+            );
+            if (r.rows.length === 0) {
+                return res.status(404).json({ success: false, error: 'Revision sheet not found' });
+            }
+            res.json({ success: true, data: mapRevisionSheet(r.rows[0]) });
+        } catch (error) {
+            fail(res, 'update_revision_sheet_failed', error);
+        }
+    },
+);
+
+router.delete('/revision-sheets/:id', async (req: AuthRequest, res) => {
+    try {
+        const r = await query(
+            'DELETE FROM school_revision_sheets WHERE id = $1 AND user_id = $2 RETURNING id',
+            [req.params.id, req.userId],
+        );
+        if (r.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Revision sheet not found' });
+        }
+        res.json({ success: true });
+    } catch (error) {
+        fail(res, 'delete_revision_sheet_failed', error);
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Revision booklets (ready-made sheet bundles)
+// ---------------------------------------------------------------------------
+
+router.get('/revision-booklets', (_req: AuthRequest, res) => {
+    res.json({ success: true, data: listBooklets() });
+});
+
+/**
+ * Import a booklet onto a student. Idempotent like the supply presets: a sheet
+ * is skipped when the student already has one with the same (subject, title),
+ * so a re-import after deleting a few sheets tops the booklet back up.
+ */
+// Not named `:id` on purpose — app.param('id', validateUuidParam) forces UUIDs
+// and a booklet is addressed by a slug.
+router.post(
+    '/revision-booklets/:bookletId/apply',
+    validate({ body: revisionCatalogApplySchema }),
+    async (req: AuthRequest, res) => {
+        const booklet = findBooklet(req.params.bookletId);
+        if (!booklet) {
+            return res.status(404).json({ success: false, error: 'Booklet not found' });
+        }
+        const b = req.body;
+        const client = await getClient();
+        try {
+            await ensureStudent(b.student_id, req.userId!);
+            await client.query('BEGIN');
+
+            const wanted: string[] | null = b.subjects ?? null;
+            const sheets = wanted
+                ? booklet.sheets.filter((s) => wanted.includes(s.subject))
+                : booklet.sheets;
+
+            // Append after whatever the student already has, so an import never
+            // reshuffles a booklet the parent has already ordered by hand.
+            const maxPos = await client.query(
+                `SELECT COALESCE(MAX(position),0) AS max FROM school_revision_sheets
+                 WHERE user_id = $1 AND student_id = $2`,
+                [req.userId, b.student_id],
+            );
+            let position = Number(maxPos.rows[0]?.max ?? 0);
+
+            let created = 0;
+            let skipped = 0;
+            for (const s of sheets) {
+                const existing = await client.query(
+                    `SELECT id FROM school_revision_sheets
+                     WHERE user_id = $1 AND student_id = $2 AND subject = $3 AND title = $4`,
+                    [req.userId, b.student_id, s.subject, s.title],
+                );
+                if (existing.rows.length > 0) {
+                    skipped++;
+                    continue;
+                }
+                position++;
+                await client.query(
+                    `INSERT INTO school_revision_sheets
+                        (user_id, student_id, subject, topic, title, sheet_type,
+                         duration_minutes, focus_warmup, instructions, exercises, source,
+                         notes, position)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13)`,
+                    [
+                        req.userId,
+                        b.student_id,
+                        s.subject,
+                        s.topic,
+                        s.title,
+                        s.sheet_type,
+                        s.duration_minutes,
+                        s.focus_warmup,
+                        s.instructions,
+                        JSON.stringify(s.exercises),
+                        s.source ?? null,
+                        s.notes ?? null,
+                        position,
+                    ],
+                );
+                created++;
+            }
+
+            await client.query('COMMIT');
+            logger.info('school.revision_booklet_applied', { bookletId: booklet.id, created });
+            res.status(201).json({
+                success: true,
+                data: {
+                    booklet_id: booklet.id,
+                    sheets_created: created,
+                    sheets_skipped: skipped,
+                    caveat: booklet.caveat,
+                },
+            });
+        } catch (error) {
+            await client.query('ROLLBACK').catch(() => undefined);
+            if (handleFkError(error, res)) return;
+            fail(res, 'apply_revision_booklet_failed', error);
+        } finally {
+            client.release();
+        }
+    },
+);
 
 // ---------------------------------------------------------------------------
 // Presets

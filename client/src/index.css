@@ -6,123 +6,214 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+    * {
+        @apply border-border;
+    }
 
-  html,
-  body,
-  #root {
-    min-height: 100%;
-  }
+    html,
+    body,
+    #root {
+        min-height: 100%;
+    }
 
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-feature-settings: 'rlig' 1, 'calt' 1;
-  }
+    body {
+        @apply bg-background text-foreground font-sans antialiased;
+        font-feature-settings:
+            'rlig' 1,
+            'calt' 1;
+    }
 
-  h1 {
-    @apply text-h1;
-  }
+    h1 {
+        @apply text-h1;
+    }
 
-  h2 {
-    @apply text-h2;
-  }
+    h2 {
+        @apply text-h2;
+    }
 
-  :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
-  }
+    :focus-visible {
+        @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    }
 }
 
 @layer components {
-  .card-nexus {
-    @apply rounded-card border border-border bg-card shadow-surface;
-    @apply transition-[box-shadow,border-color,transform] duration-base ease-soft;
-  }
+    .card-nexus {
+        @apply rounded-card border border-border bg-card shadow-surface;
+        @apply transition-[box-shadow,border-color,transform] duration-base ease-soft;
+    }
 
-  .card-nexus:hover {
-    @apply border-border-strong shadow-surface-hover;
-  }
+    .card-nexus:hover {
+        @apply border-border-strong shadow-surface-hover;
+    }
 
-  .btn-nexus {
-    @apply inline-flex items-center justify-center gap-2 font-semibold;
-    @apply transition-all duration-fast ease-soft;
-    @apply focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
-    @apply disabled:pointer-events-none disabled:opacity-50;
-  }
+    .btn-nexus {
+        @apply inline-flex items-center justify-center gap-2 font-semibold;
+        @apply transition-all duration-fast ease-soft;
+        @apply focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+        @apply disabled:pointer-events-none disabled:opacity-50;
+    }
 
-  .btn-primary {
-    @apply rounded-pill bg-primary text-primary-foreground shadow-surface;
-    @apply hover:bg-primary-hover active:scale-[0.98] active:bg-primary-pressed;
-  }
+    .btn-primary {
+        @apply rounded-pill bg-primary text-primary-foreground shadow-surface;
+        @apply hover:bg-primary-hover active:scale-[0.98] active:bg-primary-pressed;
+    }
 
-  .btn-secondary {
-    @apply rounded-input border border-border bg-secondary text-secondary-foreground;
-    @apply hover:border-border-strong hover:bg-surface-2;
-    @apply active:scale-[0.98];
-  }
+    .btn-secondary {
+        @apply rounded-input border border-border bg-secondary text-secondary-foreground;
+        @apply hover:border-border-strong hover:bg-surface-2;
+        @apply active:scale-[0.98];
+    }
 
-  .btn-ghost {
-    @apply rounded-input text-foreground;
-    @apply hover:bg-surface-2;
-    @apply active:scale-[0.98];
-  }
+    .btn-ghost {
+        @apply rounded-input text-foreground;
+        @apply hover:bg-surface-2;
+        @apply active:scale-[0.98];
+    }
 
-  .btn-destructive {
-    @apply rounded-pill bg-destructive text-destructive-foreground shadow-surface;
-    @apply hover:bg-destructive/90 active:scale-[0.98];
-  }
+    .btn-destructive {
+        @apply rounded-pill bg-destructive text-destructive-foreground shadow-surface;
+        @apply hover:bg-destructive/90 active:scale-[0.98];
+    }
 
-  .input-nexus {
-    @apply w-full rounded-input border border-input bg-background px-3 text-body;
-    @apply transition-[border-color,box-shadow] duration-fast ease-soft;
-    @apply placeholder:text-muted-foreground;
-    @apply focus-visible:border-border-strong;
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
-    min-height: 44px;
-  }
+    .input-nexus {
+        @apply w-full rounded-input border border-input bg-background px-3 text-body;
+        @apply transition-[border-color,box-shadow] duration-fast ease-soft;
+        @apply placeholder:text-muted-foreground;
+        @apply focus-visible:border-border-strong;
+        @apply disabled:cursor-not-allowed disabled:opacity-50;
+        min-height: 44px;
+    }
 
-  .chip-filter {
-    @apply inline-flex items-center gap-2 rounded-pill border border-transparent;
-    @apply bg-surface-2 px-3 py-1.5 text-caption text-foreground;
-    @apply transition-colors duration-fast ease-soft;
-  }
+    .chip-filter {
+        @apply inline-flex items-center gap-2 rounded-pill border border-transparent;
+        @apply bg-surface-2 px-3 py-1.5 text-caption text-foreground;
+        @apply transition-colors duration-fast ease-soft;
+    }
 
-  .chip-filter[data-state='active'] {
-    @apply bg-primary-soft text-primary;
-  }
+    .chip-filter[data-state='active'] {
+        @apply bg-primary-soft text-primary;
+    }
 
-  .spinner-brand {
-    @apply h-12 w-12 animate-spin rounded-full border-4 border-primary/20 border-t-primary;
-  }
+    .spinner-brand {
+        @apply h-12 w-12 animate-spin rounded-full border-4 border-primary/20 border-t-primary;
+    }
 
-  .surface-panel {
-    @apply rounded-card border border-border bg-surface;
-  }
+    .surface-panel {
+        @apply rounded-card border border-border bg-surface;
+    }
 }
 
 @layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
+    .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
 
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
 
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+    .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
-    scroll-behavior: auto !important;
-  }
+    *,
+    *::before,
+    *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Printing (École → Révisions)
+   ---------------------------------------------------------------------------
+   The app renders the selected revision sheets into #print-root, which is
+   off-screen on screen and the ONLY visible thing on paper. Everything is
+   forced to black on white: the app ships a dark theme, and browsers drop
+   background colours when printing, which would otherwise print white text on
+   nothing. Sizes are in mm so a sheet fills an A4 page the same way on every
+   machine.
+--------------------------------------------------------------------------- */
+
+#print-root {
+    display: none;
+}
+
+@page {
+    size: A4 portrait;
+    margin: 14mm 14mm 16mm;
+}
+
+@media print {
+    html,
+    body {
+        background: #fff !important;
+        height: auto !important;
+    }
+
+    /* Hide the app without unmounting it — #print-root lives inside the tree. */
+    body > *:not(#print-root) {
+        display: none !important;
+    }
+
+    #print-root {
+        display: block !important;
+        position: static;
+        color: #000;
+        background: #fff;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 11.5pt;
+        line-height: 1.5;
+    }
+
+    #print-root * {
+        color: #000 !important;
+        box-shadow: none !important;
+    }
+
+    /* One sheet per page; the last one must not trail a blank page. */
+    .print-page {
+        break-after: page;
+        page-break-after: always;
+    }
+
+    .print-page:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+
+    /* A question and its answer lines must never be split across two pages. */
+    .print-avoid-break {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .print-rule {
+        border-bottom: 1px solid #000;
+    }
+
+    .print-box {
+        border: 1.5pt solid #000;
+        border-radius: 3mm;
+    }
+
+    .print-dashed {
+        border: 1pt dashed #555;
+        border-radius: 3mm;
+    }
+
+    /* The ruled writing lines left under each question. */
+    .print-write-line {
+        border-bottom: 0.6pt solid #999;
+        height: 8mm;
+    }
+
+    a[href]::after {
+        content: '';
+    }
 }
