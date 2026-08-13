@@ -39,6 +39,7 @@ import frGarden from './locales/fr/garden.json';
 import frSchool from './locales/fr/school.json';
 import frDialogs from './locales/fr/dialogs.json';
 import frDomain from './locales/fr/domain.json';
+import frStatements from './locales/fr/statements.json';
 
 import enCommon from './locales/en/common.json';
 import enVacations from './locales/en/vacations.json';
@@ -58,6 +59,7 @@ import enGarden from './locales/en/garden.json';
 import enSchool from './locales/en/school.json';
 import enDialogs from './locales/en/dialogs.json';
 import enDomain from './locales/en/domain.json';
+import enStatements from './locales/en/statements.json';
 
 export const SUPPORTED_LANGUAGES = ['fr', 'en'] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
@@ -81,6 +83,7 @@ const fr = {
     ...frSchool,
     ...frDialogs,
     ...frDomain,
+    ...frStatements,
 };
 
 const en = {
@@ -102,6 +105,7 @@ const en = {
     ...enSchool,
     ...enDialogs,
     ...enDomain,
+    ...enStatements,
 };
 
 void i18n

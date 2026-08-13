@@ -1,0 +1,102 @@
+{
+  "statements": {
+    "unknown_issuer": "Émetteur inconnu",
+    "unknown_date": "Date inconnue",
+    "status": {
+      "pending_review": "À valider",
+      "imported": "Importé",
+      "failed": "Échec"
+    },
+    "tx_status": {
+      "pending": "À importer",
+      "imported": "Dans le budget",
+      "ignored": "Exclue",
+      "duplicate": "Doublon"
+    },
+    "fields": {
+      "period": "Période",
+      "new_balance": "Nouveau solde",
+      "previous_balance": "Solde précédent",
+      "minimum_due": "Paiement minimum",
+      "due_date": "Échéance",
+      "total_purchases": "Achats",
+      "total_payments": "Paiements",
+      "credit_limit": "Limite de crédit",
+      "interest_rate": "Taux sur achats"
+    },
+    "due": {
+      "soon": "Paiement dû dans {{days}} jour(s)",
+      "overdue": "Paiement en retard de {{days}} jour(s)",
+      "detail": "Solde de {{balance}}, minimum {{minimum}}, à régler avant le {{date}}."
+    },
+    "kpi": {
+      "balance": "Solde de la carte",
+      "utilization": "{{percent}} % de {{limit}}",
+      "purchases": "Achats du dernier relevé",
+      "minimum_due": "Paiement minimum",
+      "statements": "Relevés importés",
+      "pending_review": "{{count}} en attente de validation"
+    },
+    "list": {
+      "subtitle": "Importe le PDF de ton relevé chaque mois : les transactions alimentent automatiquement ton budget.",
+      "import": "Importer un relevé",
+      "loading": "Chargement des relevés...",
+      "empty_title": "Aucun relevé importé",
+      "empty_body": "Télécharge le PDF de ton relevé depuis le site de ta banque, puis importe-le ici. L'IA en extrait les transactions, tu les valides, et ton budget se met à jour.",
+      "to_review": "{{count}} à valider",
+      "transactions": "{{count}} transactions"
+    },
+    "import": {
+      "title": "Importer un relevé",
+      "description": "PDF du relevé de ta banque ou de ta carte de crédit.",
+      "pick": "Choisir un fichier PDF",
+      "pick_hint": "PDF texte uniquement, {{max}} Mo maximum",
+      "submit": "Analyser le relevé",
+      "uploading": "Envoi du fichier... {{percent}} %",
+      "parsing": "Lecture du relevé par l'IA, cela prend quelques secondes...",
+      "success_title": "{{count}} transactions détectées",
+      "to_review": "À valider",
+      "auto_excluded": "Exclues d'office",
+      "review_now": "Vérifier les transactions",
+      "open_existing": "Ouvrir le relevé existant",
+      "error_type": "Le fichier doit être un PDF.",
+      "error_size": "Fichier trop volumineux (maximum {{max}} Mo).",
+      "error_duplicate": "Ce relevé a déjà été importé.",
+      "error_scan": "Ce PDF est un scan ou une photo : il ne contient pas de texte lisible. Télécharge le relevé original depuis le site de ta banque.",
+      "error_quota": "Quota d'IA mensuel atteint. Réessaie le mois prochain ou augmente la limite.",
+      "error_network": "Connexion perdue pendant l'envoi.",
+      "error_generic": "Le relevé n'a pas pu être analysé."
+    },
+    "table": {
+      "date": "Date",
+      "description": "Description",
+      "category": "Catégorie",
+      "member": "Membre",
+      "amount": "Montant",
+      "status": "Statut",
+      "nobody": "Non assignée"
+    },
+    "review": {
+      "loading": "Chargement du relevé...",
+      "load_error": "Le relevé n'a pas pu être chargé.",
+      "save_error": "La modification n'a pas pu être enregistrée.",
+      "confirm_error": "L'import dans le budget a échoué.",
+      "delete_error": "La suppression a échoué.",
+      "delete": "Supprimer le relevé",
+      "delete_confirm": "Supprimer ce relevé ? Les entrées déjà ajoutées au budget seront conservées.",
+      "confirm": "Importer {{count}} transactions",
+      "already_imported": "Tout est importé",
+      "empty": "Aucune transaction dans cette vue.",
+      "low_confidence": "à vérifier",
+      "ignore": "Exclure du budget",
+      "restore": "Réintégrer",
+      "ignore_all": "Tout exclure",
+      "pending_total": "{{count}} transactions à importer, soit {{total}}",
+      "filter": {
+        "all": "Toutes",
+        "pending": "À importer",
+        "excluded": "Exclues"
+      }
+    }
+  }
+}

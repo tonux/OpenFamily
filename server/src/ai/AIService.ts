@@ -71,6 +71,15 @@ import {
     receiptExtractionSystemPrompt,
 } from './prompts/receiptPrompts';
 import {
+    statementSummarySystemPrompt,
+    statementTransactionsSystemPrompt,
+    buildStatementSummaryUserMessage,
+    buildStatementTransactionsUserMessage,
+    type ExtractedStatementSummary,
+    type ExtractedStatementTransaction,
+    type StatementSummaryInput,
+} from './prompts/statementPrompts';
+import {
     type BudgetAnalysisInput,
     buildBudgetAnalysisUserPrompt,
     budgetAnalysisSystemPrompt,
@@ -2196,3 +2205,358 @@ export type {
 export const setAiProviderForTests = (provider: BaseProvider | null): void => {
     cachedProvider = provider;
 };
+
+// ---------------------------------------------------------------------------
+// Bank statement import (PR: monthly statement → budget)
+//
+// Two-stage extraction over the PDF's text layer. Stage 1 reads the summary
+// block once; stage 2 walks the body chunk by chunk. Chunks are processed
+// SEQUENTIALLY rather than with Promise.all: the per-user token quota is
+// checked and debited inside AIService.chat, and firing ten calls at once
+// would let a user race past their monthly ceiling. A 70-line statement is
+// three or four calls — a few seconds — so the serialization costs little.
+// ---------------------------------------------------------------------------
+
+export interface ExtractStatementSummaryResult {
+    summary: ExtractedStatementSummary;
+    model: string;
+}
+
+/**
+ * A transaction plus the chunk it was read from.
+ *
+ * The chunk index is not cosmetic: chunks overlap by design, so the same line
+ * legitimately comes back twice from two adjacent chunks. Deduplication has to
+ * distinguish that from a household that really did buy two identical coffees
+ * on the same day — and the only signal that separates them is whether the two
+ * copies came from different chunks.
+ */
+export interface SourcedStatementTransaction extends ExtractedStatementTransaction {
+    chunkIndex: number;
+}
+
+export interface ExtractStatementTransactionsResult {
+    transactions: SourcedStatementTransaction[];
+    model: string;
+    /** Chunks whose extraction failed — surfaced to the user, not swallowed. */
+    failedChunks: number[];
+}
+
+// Head of the document handed to the summary pass. The summary block is always
+// on page 1; 6000 chars covers it with room to spare even on issuers that put
+// a marketing banner first, and keeps the call cheap.
+const STATEMENT_SUMMARY_HEAD_CHARS = 6000;
+
+// A statement line above this is a data error, not a purchase. Kept generous
+// so a legitimate large payment (mortgage, tax instalment) still passes.
+const MAX_STATEMENT_AMOUNT = 1_000_000;
+
+const STATEMENT_CONFIDENCE_VALID = new Set(['high', 'medium', 'low']);
+
+const toStatementAmount = (raw: unknown): number | null => {
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(n)) return null;
+    const abs = Math.abs(n);
+    if (abs === 0 || abs >= MAX_STATEMENT_AMOUNT) return null;
+    return Math.round(abs * 100) / 100;
+};
+
+const toStatementSignedAmount = (raw: unknown): number | null => {
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(n)) return null;
+    if (Math.abs(n) >= MAX_STATEMENT_AMOUNT) return null;
+    return Math.round(Math.abs(n) * 100) / 100;
+};
+
+const toIsoDate = (raw: unknown): string | null => {
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (!ISO_DATE_RE.test(trimmed)) return null;
+    // Reject impossible calendar dates the regex alone would accept
+    // (2026-02-31): Date parsing normalizes them, so a round-trip mismatch
+    // means the model produced something that does not exist.
+    const d = new Date(`${trimmed}T00:00:00Z`);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString().slice(0, 10) === trimmed ? trimmed : null;
+};
+
+const toConfidence = (raw: unknown): 'high' | 'medium' | 'low' => {
+    const v = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+    return (STATEMENT_CONFIDENCE_VALID.has(v) ? v : 'low') as 'high' | 'medium' | 'low';
+};
+
+const sanitizeStatementSummary = (raw: unknown): ExtractedStatementSummary | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const str = (key: string, max: number): string | null => {
+        const v = r[key];
+        return typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
+    };
+
+    let currency: string | null = null;
+    if (typeof r.currency === 'string') {
+        const cleaned = r.currency.trim().toUpperCase();
+        if (ISO_CURRENCY_RE.test(cleaned)) currency = cleaned;
+    }
+
+    let cardLast4: string | null = null;
+    if (typeof r.cardLast4 === 'string') {
+        const digits = r.cardLast4.replace(/\D/g, '');
+        if (digits.length >= 4) cardLast4 = digits.slice(-4);
+    }
+
+    // A percentage, not a money amount — its own bounds.
+    let interestRate: number | null = null;
+    const rate =
+        typeof r.interestRatePurchases === 'number'
+            ? r.interestRatePurchases
+            : Number(r.interestRatePurchases);
+    if (Number.isFinite(rate) && rate > 0 && rate < 100) {
+        interestRate = Math.round(rate * 100) / 100;
+    }
+
+    return {
+        issuer: str('issuer', 120),
+        accountLabel: str('accountLabel', 120),
+        cardLast4,
+        currency,
+        statementDate: toIsoDate(r.statementDate),
+        periodStart: toIsoDate(r.periodStart),
+        periodEnd: toIsoDate(r.periodEnd),
+        previousBalance: toStatementSignedAmount(r.previousBalance),
+        newBalance: toStatementSignedAmount(r.newBalance),
+        totalPurchases: toStatementAmount(r.totalPurchases),
+        totalPayments: toStatementAmount(r.totalPayments),
+        totalCashAdvances: toStatementAmount(r.totalCashAdvances),
+        totalFees: toStatementSignedAmount(r.totalFees),
+        minimumDue: toStatementSignedAmount(r.minimumDue),
+        dueDate: toIsoDate(r.dueDate),
+        creditLimit: toStatementAmount(r.creditLimit),
+        availableCredit: toStatementSignedAmount(r.availableCredit),
+        interestRatePurchases: interestRate,
+        rewardsEarned: toStatementSignedAmount(r.rewardsEarned),
+        confidence: toConfidence(r.confidence),
+        warnings: stringArray(r.warnings, 4),
+    };
+};
+
+const sanitizeStatementTransactions = (
+    raw: unknown,
+    bounds: { periodStart: string | null; periodEnd: string | null },
+): ExtractedStatementTransaction[] => {
+    const container = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const list = Array.isArray(container.transactions)
+        ? container.transactions
+        : Array.isArray(raw)
+          ? (raw as unknown[])
+          : [];
+
+    // A transaction dated outside a generous window around the statement
+    // period is a year the model got wrong (the classic December/January
+    // mistake). Rather than silently keeping a row that will land in the wrong
+    // month of the dashboard, we drop it — the reconciliation delta then
+    // flags the statement for review.
+    const lower = bounds.periodStart ? new Date(`${bounds.periodStart}T00:00:00Z`) : null;
+    const upper = bounds.periodEnd ? new Date(`${bounds.periodEnd}T00:00:00Z`) : null;
+    if (lower) lower.setUTCDate(lower.getUTCDate() - 45);
+    if (upper) upper.setUTCDate(upper.getUTCDate() + 15);
+
+    const out: ExtractedStatementTransaction[] = [];
+
+    for (const item of list) {
+        if (!item || typeof item !== 'object') continue;
+        const t = item as Record<string, unknown>;
+
+        const date = toIsoDate(t.date);
+        if (!date) continue;
+
+        if (lower || upper) {
+            const d = new Date(`${date}T00:00:00Z`);
+            if (lower && d < lower) continue;
+            if (upper && d > upper) continue;
+        }
+
+        const amount = toStatementAmount(t.amount);
+        if (amount === null) continue;
+
+        const description =
+            typeof t.description === 'string' && t.description.trim()
+                ? t.description.trim().replace(/\s+/g, ' ').slice(0, 200)
+                : null;
+        if (!description) continue;
+
+        const merchant =
+            typeof t.merchant === 'string' && t.merchant.trim()
+                ? t.merchant.trim().replace(/\s+/g, ' ').slice(0, 160)
+                : null;
+
+        const categoryRaw = typeof t.category === 'string' ? t.category.trim().slice(0, 50) : '';
+
+        out.push({
+            date,
+            postedDate: toIsoDate(t.postedDate),
+            description,
+            merchant,
+            amount,
+            // Default to expense: on a card statement the overwhelming
+            // majority of lines are debits, and a credit wrongly booked as an
+            // expense is visible in the review table, whereas the reverse
+            // quietly inflates income.
+            isExpense: t.isExpense === false ? false : true,
+            category: categoryRaw || 'Autre',
+            confidence: toConfidence(t.confidence),
+        });
+    }
+
+    return out;
+};
+
+/**
+ * Read the summary block (balances, minimum due, limits) from a statement.
+ *
+ * Only the head of the document is sent — the summary never appears past the
+ * first page, and shipping the whole statement here would double the cost of
+ * the import for no gain.
+ */
+export const extractStatementSummary = async (
+    input: StatementSummaryInput,
+    ctx: { userId: string },
+): Promise<ExtractStatementSummaryResult> => {
+    if (!input.text || input.text.trim().length < 40) {
+        throw new AiError('BAD_REQUEST', 'Statement text is too short to contain a summary');
+    }
+
+    const cfg = getAiConfig();
+    const model = cfg.models.default;
+
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: statementSummarySystemPrompt },
+                {
+                    role: 'user',
+                    content: buildStatementSummaryUserMessage({
+                        ...input,
+                        text: input.text.slice(0, STATEMENT_SUMMARY_HEAD_CHARS),
+                    }),
+                },
+            ],
+            temperature: 0,
+            maxTokens: 900,
+            jsonMode: true,
+            model,
+        },
+        { userId: ctx.userId, feature: 'budget.statement_summary', model },
+    );
+
+    const summary = sanitizeStatementSummary(safeParseJson(response.content));
+    if (!summary) {
+        throw new AiError('BAD_JSON', 'Model did not return a usable statement summary');
+    }
+
+    return { summary, model: response.model };
+};
+
+/**
+ * Read the transaction lines from the body of a statement.
+ *
+ * Chunk failures are collected rather than thrown: losing one chunk out of
+ * four should still give the user 75% of their statement plus an explicit
+ * "lines 40-55 could not be read" warning, which is far more useful than
+ * failing the whole import.
+ *
+ * Overlapping chunks (see chunkStatementText) mean the same line can come back
+ * twice; the caller deduplicates on the (date, description, amount) hash it
+ * needs to compute anyway for cross-statement dedup.
+ */
+export const extractStatementTransactions = async (
+    input: {
+        chunks: string[];
+        periodStart: string | null;
+        periodEnd: string | null;
+        suggestedCategories: string[];
+    },
+    ctx: { userId: string },
+): Promise<ExtractStatementTransactionsResult> => {
+    if (input.chunks.length === 0) {
+        throw new AiError('BAD_REQUEST', 'No statement content to extract transactions from');
+    }
+
+    const cfg = getAiConfig();
+    const model = cfg.models.default;
+    const transactions: SourcedStatementTransaction[] = [];
+    const failedChunks: number[] = [];
+    let lastModel = model;
+
+    for (let i = 0; i < input.chunks.length; i += 1) {
+        try {
+            const response = await AIService.chat(
+                {
+                    messages: [
+                        { role: 'system', content: statementTransactionsSystemPrompt },
+                        {
+                            role: 'user',
+                            content: buildStatementTransactionsUserMessage({
+                                chunk: input.chunks[i],
+                                chunkIndex: i + 1,
+                                chunkCount: input.chunks.length,
+                                periodStart: input.periodStart,
+                                periodEnd: input.periodEnd,
+                                suggestedCategories: input.suggestedCategories,
+                            }),
+                        },
+                    ],
+                    temperature: 0,
+                    // ~90 tokens per transaction object × 40 lines of headroom.
+                    maxTokens: 4000,
+                    jsonMode: true,
+                    model,
+                },
+                { userId: ctx.userId, feature: 'budget.statement_transactions', model },
+            );
+            lastModel = response.model;
+            const rows = sanitizeStatementTransactions(safeParseJson(response.content), {
+                periodStart: input.periodStart,
+                periodEnd: input.periodEnd,
+            });
+            transactions.push(...rows.map((row) => ({ ...row, chunkIndex: i + 1 })));
+        } catch (error) {
+            // A quota or disabled error will hit every remaining chunk too —
+            // stop rather than burn through them for the same failure.
+            if (
+                error instanceof AiError &&
+                (error.code === 'QUOTA_EXCEEDED' || error.code === 'DISABLED')
+            ) {
+                if (transactions.length === 0) throw error;
+                for (let j = i; j < input.chunks.length; j += 1) failedChunks.push(j + 1);
+                logger.warn('ai.statement_extraction_aborted', {
+                    code: error.code,
+                    extractedSoFar: transactions.length,
+                    remainingChunks: input.chunks.length - i,
+                });
+                break;
+            }
+            failedChunks.push(i + 1);
+            logger.warn('ai.statement_chunk_failed', {
+                chunkIndex: i + 1,
+                chunkCount: input.chunks.length,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+
+    if (transactions.length === 0 && failedChunks.length === input.chunks.length) {
+        throw new AiError('BAD_JSON', 'No transaction could be extracted from the statement');
+    }
+
+    return { transactions, model: lastModel, failedChunks };
+};
+
+/** Re-export statement types so routes/tests import them from AIService. */
+export type {
+    ExtractedStatementSummary,
+    ExtractedStatementTransaction,
+    StatementSummaryInput,
+    StatementTransactionsInput,
+} from './prompts/statementPrompts';

@@ -1,0 +1,102 @@
+{
+  "statements": {
+    "unknown_issuer": "Unknown issuer",
+    "unknown_date": "Unknown date",
+    "status": {
+      "pending_review": "Needs review",
+      "imported": "Imported",
+      "failed": "Failed"
+    },
+    "tx_status": {
+      "pending": "To import",
+      "imported": "In budget",
+      "ignored": "Excluded",
+      "duplicate": "Duplicate"
+    },
+    "fields": {
+      "period": "Period",
+      "new_balance": "New balance",
+      "previous_balance": "Previous balance",
+      "minimum_due": "Minimum payment",
+      "due_date": "Due date",
+      "total_purchases": "Purchases",
+      "total_payments": "Payments",
+      "credit_limit": "Credit limit",
+      "interest_rate": "Purchase rate"
+    },
+    "due": {
+      "soon": "Payment due in {{days}} day(s)",
+      "overdue": "Payment {{days}} day(s) overdue",
+      "detail": "Balance {{balance}}, minimum {{minimum}}, due by {{date}}."
+    },
+    "kpi": {
+      "balance": "Card balance",
+      "utilization": "{{percent}}% of {{limit}}",
+      "purchases": "Latest statement purchases",
+      "minimum_due": "Minimum payment",
+      "statements": "Statements imported",
+      "pending_review": "{{count}} awaiting review"
+    },
+    "list": {
+      "subtitle": "Import your statement PDF each month — transactions flow straight into your budget.",
+      "import": "Import a statement",
+      "loading": "Loading statements...",
+      "empty_title": "No statement imported yet",
+      "empty_body": "Download your statement PDF from your bank, then import it here. The AI extracts the transactions, you review them, and your budget updates.",
+      "to_review": "{{count}} to review",
+      "transactions": "{{count}} transactions"
+    },
+    "import": {
+      "title": "Import a statement",
+      "description": "PDF statement from your bank or credit card.",
+      "pick": "Choose a PDF file",
+      "pick_hint": "Text-based PDF only, {{max}} MB max",
+      "submit": "Analyse statement",
+      "uploading": "Uploading... {{percent}}%",
+      "parsing": "The AI is reading your statement, this takes a few seconds...",
+      "success_title": "{{count}} transactions detected",
+      "to_review": "To review",
+      "auto_excluded": "Auto-excluded",
+      "review_now": "Review transactions",
+      "open_existing": "Open the existing statement",
+      "error_type": "The file must be a PDF.",
+      "error_size": "File too large (max {{max}} MB).",
+      "error_duplicate": "This statement has already been imported.",
+      "error_scan": "This PDF is a scan or a photo and holds no readable text. Download the original statement from your bank.",
+      "error_quota": "Monthly AI quota reached. Try again next month or raise the limit.",
+      "error_network": "Connection lost during upload.",
+      "error_generic": "The statement could not be analysed."
+    },
+    "table": {
+      "date": "Date",
+      "description": "Description",
+      "category": "Category",
+      "member": "Member",
+      "amount": "Amount",
+      "status": "Status",
+      "nobody": "Unassigned"
+    },
+    "review": {
+      "loading": "Loading statement...",
+      "load_error": "The statement could not be loaded.",
+      "save_error": "The change could not be saved.",
+      "confirm_error": "Importing into the budget failed.",
+      "delete_error": "Deletion failed.",
+      "delete": "Delete statement",
+      "delete_confirm": "Delete this statement? Entries already added to the budget are kept.",
+      "confirm": "Import {{count}} transactions",
+      "already_imported": "Everything imported",
+      "empty": "No transaction in this view.",
+      "low_confidence": "check this",
+      "ignore": "Exclude from budget",
+      "restore": "Restore",
+      "ignore_all": "Exclude all",
+      "pending_total": "{{count}} transactions to import, totalling {{total}}",
+      "filter": {
+        "all": "All",
+        "pending": "To import",
+        "excluded": "Excluded"
+      }
+    }
+  }
+}

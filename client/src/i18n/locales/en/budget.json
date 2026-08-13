@@ -14,7 +14,8 @@
     "tabs": {
       "entries": "Entries",
       "statistics": "Statistics",
-      "limits": "Limits"
+      "limits": "Limits",
+      "statements": "Statements"
     },
     "filter": {
       "all_members": "All members",

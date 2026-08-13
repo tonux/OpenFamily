@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ReceiptScanDialog, type ExtractedReceipt } from '../components/app/ReceiptScanDialog';
 import { BudgetAnalysisDialog } from '../components/app/BudgetAnalysisDialog';
+import { StatementsTab } from '../components/app/StatementsTab';
 import {
     Card,
     CardContent,
@@ -1033,6 +1034,24 @@ const Budget: React.FC = () => {
                         })}
                     </div>
                 </div>
+            ),
+        },
+        {
+            value: 'statements',
+            label: t('budget.tabs.statements'),
+            content: (
+                <StatementsTab
+                    categories={[...CATEGORY_VALUES]}
+                    familyMembers={familyMembers}
+                    onBudgetChanged={() => {
+                        // A confirmed statement writes budget_entries directly,
+                        // so every derived view has to be refetched — not just
+                        // the list, or the charts would contradict the table.
+                        void loadEntries();
+                        void loadStats();
+                        void loadMonthlyStats();
+                    }}
+                />
             ),
         },
     ];
