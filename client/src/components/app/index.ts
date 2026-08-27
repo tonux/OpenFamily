@@ -1,3 +1,10 @@
 export { default as ListRow } from './ListRow';
 export { default as EmptyState } from './EmptyState';
 export { default as ChartCard } from './ChartCard';
+export { default as HouseCareTab } from './HouseCareTab';
+export { default as HouseProfileDialog } from './HouseProfileDialog';
+export { default as CareTaskDialog } from './CareTaskDialog';
+export { default as CareCompleteDialog } from './CareCompleteDialog';
+export { default as CarePlanAiDialog } from './CarePlanAiDialog';
+export { default as WeeklyBriefingDialog } from './WeeklyBriefingDialog';
+export { default as HouseDiagnoseDialog } from './HouseDiagnoseDialog';

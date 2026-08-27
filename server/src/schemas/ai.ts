@@ -203,3 +203,41 @@ export const gardenScanBodySchema = z
     .strict();
 
 export type GardenScanBody = z.infer<typeof gardenScanBodySchema>;
+
+// ---------------------------------------------------------------------------
+// House care — the seasonal maintenance assistant.
+//
+// All three bodies are deliberately thin: the house profile, the existing
+// program, the equipment inventory and the weather are all resolved server-side
+// from the authenticated user. The client can't inflate the input, reach into
+// someone else's house, or fake a profile to steer the advice.
+// ---------------------------------------------------------------------------
+
+export const generateHouseCarePlanBodySchema = z
+    .object({
+        season: z.enum(['Printemps', 'Été', 'Automne', 'Hiver']).optional(),
+        /** Free-text context ("je pars 3 semaines en janvier"). */
+        focus: z.string().trim().max(500).optional(),
+    })
+    .strict();
+
+export type GenerateHouseCarePlanBody = z.infer<typeof generateHouseCarePlanBodySchema>;
+
+export const generateWeeklyBriefingBodySchema = z
+    .object({
+        /** Skip the forecast lookup (offline self-host, or no city configured). */
+        includeWeather: z.boolean().optional().default(true),
+    })
+    .strict();
+
+export type GenerateWeeklyBriefingBody = z.infer<typeof generateWeeklyBriefingBodySchema>;
+
+export const houseDiagnoseBodySchema = z
+    .object({
+        symptom: z.string().trim().min(10).max(1500),
+        location: z.string().trim().max(120).optional(),
+        since: z.string().trim().max(120).optional(),
+    })
+    .strict();
+
+export type HouseDiagnoseBody = z.infer<typeof houseDiagnoseBodySchema>;

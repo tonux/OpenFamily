@@ -17,6 +17,11 @@ import {
     generateVacationLuggage,
     generateGardeningTips,
     scanGardenPhoto,
+    generateHouseCarePlan,
+    generateWeeklyBriefing,
+    generateHouseDiagnosis,
+    type HouseCareProfileInput,
+    type WeeklyBriefingInput,
     type GardenScanZoneContext,
     type RecipeMemberInput,
     type PlannedMealLine,
@@ -38,12 +43,16 @@ import {
     generateVacationLuggageBodySchema,
     generateVacationPlanBodySchema,
     generateGardeningTipsBodySchema,
+    generateHouseCarePlanBodySchema,
+    generateWeeklyBriefingBodySchema,
     gardenScanBodySchema,
+    houseDiagnoseBodySchema,
     kidsActivitiesBodySchema,
     parseShoppingNLBodySchema,
 } from '../schemas/ai';
 import { query } from '../db';
-import { getForecastForOffset, summarize } from '../weather/WeatherService';
+import { daysBetween, isInSeason } from '../lib/houseCareSchedule';
+import { getForecastForOffset, getWeeklyForecast, summarize } from '../weather/WeatherService';
 import { WeatherError } from '../weather/errors';
 import { resolveTargetDay } from '../lib/dayContext';
 import { pickFallbackActivities } from '../ai/fallbacks/activityBank';
@@ -1577,5 +1586,285 @@ router.post('/garden/scan-photo', singleImageUpload('garden_scan'), async (req, 
         sendAiError(res, error, 'garden_scan_photo');
     }
 });
+
+// ---------------------------------------------------------------------------
+// House care assistant
+//
+// The three endpoints share one rule: the client sends almost nothing. The
+// house profile, the existing program, the equipment inventory and the weather
+// are all resolved here from the authenticated user, so the model always sees
+// the real house and never a client-supplied one.
+//
+// All three are read-only. The care plan returns a PROPOSAL; it lands in the DB
+// only when the user accepts it through POST /api/house/care/tasks/bulk.
+// ---------------------------------------------------------------------------
+
+/**
+ * Load the house profile in the shape the prompts expect, falling back to
+ * cold-climate single-family defaults when the user hasn't filled it in — the
+ * assistant has to be useful before onboarding, not after.
+ */
+const loadCareProfile = async (userId: string): Promise<HouseCareProfileInput> => {
+    const [profileRes, userRes] = await Promise.all([
+        query('SELECT * FROM house_profile WHERE user_id = $1', [userId]),
+        query('SELECT city FROM users WHERE id = $1', [userId]),
+    ]);
+    const p = profileRes.rows[0] ?? {};
+    return {
+        dwellingType: (p.dwelling_type as string) ?? 'Unifamiliale',
+        buildYear: p.build_year ?? null,
+        livingAreaM2: p.living_area_m2 != null ? Number(p.living_area_m2) : null,
+        occupants: p.occupants ?? null,
+        climateZone: (p.climate_zone as string) ?? 'Continental humide (hivers rigoureux)',
+        city: userRes.rows[0]?.city ?? null,
+        hasBasement: p.has_basement ?? true,
+        basementFinished: Boolean(p.basement_finished),
+        hasSumpPump: Boolean(p.has_sump_pump),
+        hasGarage: Boolean(p.has_garage),
+        hasPool: Boolean(p.has_pool),
+        hasSeptic: Boolean(p.has_septic),
+        hasWell: Boolean(p.has_well),
+        hasIrrigation: Boolean(p.has_irrigation),
+        hasAirExchanger: Boolean(p.has_air_exchanger),
+        heatingTypes: Array.isArray(p.heating_types) ? (p.heating_types as string[]) : [],
+        roofType: p.roof_type ?? null,
+        roofYear: p.roof_year ?? null,
+        waterHeaterYear: p.water_heater_year ?? null,
+        windowsYear: p.windows_year ?? null,
+        sidingType: p.siding_type ?? null,
+        propertyValue: p.property_value != null ? Number(p.property_value) : null,
+        notes: p.notes ?? null,
+    };
+};
+
+/**
+ * POST /api/ai/house/care-plan
+ * Body: { season?, focus? }
+ * Returns: { plan, model }
+ *
+ * Proposes what's MISSING from the user's program for their specific house.
+ * Read-only: the client renders the proposal as an editable checklist and
+ * creates the accepted rows through /api/house/care/tasks/bulk.
+ */
+router.post(
+    '/house/care-plan',
+    validate({ body: generateHouseCarePlanBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const { season, focus } = req.body as import('../schemas/ai').GenerateHouseCarePlanBody;
+
+            const profile = await loadCareProfile(req.userId!);
+
+            const [tasksRes, equipmentsRes] = await Promise.all([
+                query(
+                    `SELECT title FROM house_care_tasks
+                     WHERE user_id = $1 AND is_active = true
+                     ORDER BY title ASC LIMIT 120`,
+                    [req.userId],
+                ),
+                query(
+                    `SELECT name, category, purchase_date FROM house_equipments
+                     WHERE user_id = $1 ORDER BY name ASC LIMIT 30`,
+                    [req.userId],
+                ),
+            ]);
+
+            const result = await generateHouseCarePlan(
+                {
+                    profile,
+                    existingTasks: tasksRes.rows.map((r: any) => r.title as string),
+                    equipments: equipmentsRes.rows.map((r: any) => ({
+                        name: r.name as string,
+                        category: r.category as string,
+                        purchaseYear: r.purchase_date
+                            ? Number(String(r.purchase_date).slice(0, 4))
+                            : null,
+                    })),
+                    season: season ?? seasonForMonth(new Date().getMonth() + 1),
+                    focus: focus ?? null,
+                },
+                { userId: req.userId! },
+            );
+
+            res.json({ success: true, data: result });
+        } catch (error) {
+            sendAiError(res, error, 'house_care_plan');
+        }
+    },
+);
+
+/**
+ * POST /api/ai/house/weekly-briefing
+ * Body: { includeWeather? }
+ * Returns: { briefing, model }
+ *
+ * The weekly assistant. Grounded in the real 7-day forecast when the user has a
+ * city saved — that's what turns generic seasonal advice ("pense au gel") into
+ * something actionable ("il gèle vendredi, débranche les boyaux d'ici jeudi").
+ * A weather failure degrades the briefing instead of failing it: bad advice
+ * beats no advice here, and no-weather advice is still correct.
+ */
+router.post(
+    '/house/weekly-briefing',
+    validate({ body: generateWeeklyBriefingBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const { includeWeather } =
+                req.body as import('../schemas/ai').GenerateWeeklyBriefingBody;
+
+            const profile = await loadCareProfile(req.userId!);
+            const todayIso = new Date().toISOString().slice(0, 10);
+            const month = new Date().getMonth() + 1;
+
+            let forecast: WeeklyBriefingInput['forecast'] = [];
+            if (includeWeather !== false) {
+                try {
+                    const loc = await query('SELECT latitude, longitude FROM users WHERE id = $1', [
+                        req.userId,
+                    ]);
+                    const lat = loc.rows[0]?.latitude;
+                    const lon = loc.rows[0]?.longitude;
+                    if (lat != null && lon != null) {
+                        const weekly = await getWeeklyForecast(Number(lat), Number(lon), 7);
+                        forecast = weekly.days.map((d) => ({
+                            date: d.date,
+                            tempMin: d.tempMin,
+                            tempMax: d.tempMax,
+                            precipitationMm: d.precipitationMm,
+                            label: d.label,
+                            windSpeedMax: d.windSpeedMax,
+                        }));
+                    }
+                } catch (weatherError) {
+                    logger.warn('ai.house_briefing_weather_failed', {
+                        error:
+                            weatherError instanceof Error
+                                ? weatherError.message
+                                : String(weatherError),
+                    });
+                }
+            }
+
+            const [tasksRes, weekLogsRes, issuesRes] = await Promise.all([
+                query(
+                    `SELECT id, title, category, priority, frequency, season, month_start, month_end,
+                            next_due_on, risk_if_skipped
+                     FROM house_care_tasks
+                     WHERE user_id = $1 AND is_active = true
+                     ORDER BY next_due_on ASC NULLS LAST
+                     LIMIT 200`,
+                    [req.userId],
+                ),
+                query(
+                    `SELECT DISTINCT task_id FROM house_care_logs
+                     WHERE user_id = $1 AND done_on >= date_trunc('week', CURRENT_DATE)::date`,
+                    [req.userId],
+                ),
+                query(
+                    `SELECT l.done_on, l.observation, t.title AS task_title
+                     FROM house_care_logs l
+                     JOIN house_care_tasks t ON l.task_id = t.id
+                     WHERE l.user_id = $1 AND l.status = 'Problème'
+                     ORDER BY l.done_on DESC LIMIT 5`,
+                    [req.userId],
+                ),
+            ]);
+
+            const doneThisWeek = new Set(weekLogsRes.rows.map((r: any) => r.task_id as string));
+            const horizon = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+
+            const weeklyChecklist = tasksRes.rows
+                .filter((t: any) => t.frequency === 'Hebdomadaire' && isInSeason(t, month))
+                .map((t: any) => ({
+                    title: t.title as string,
+                    doneThisWeek: doneThisWeek.has(t.id as string),
+                }));
+
+            const scheduled = tasksRes.rows.filter((t: any) => t.frequency !== 'Hebdomadaire');
+            const overdue = scheduled
+                .filter((t: any) => t.next_due_on && t.next_due_on < todayIso)
+                .slice(0, 12)
+                .map((t: any) => ({
+                    title: t.title as string,
+                    category: t.category as string,
+                    priority: t.priority as string,
+                    dueOn: t.next_due_on as string,
+                    daysLate: daysBetween(t.next_due_on as string, todayIso),
+                    riskIfSkipped: t.risk_if_skipped ?? null,
+                }));
+            const dueSoon = scheduled
+                .filter(
+                    (t: any) =>
+                        t.next_due_on && t.next_due_on >= todayIso && t.next_due_on <= horizon,
+                )
+                .slice(0, 12)
+                .map((t: any) => ({
+                    title: t.title as string,
+                    category: t.category as string,
+                    priority: t.priority as string,
+                    dueOn: t.next_due_on as string,
+                    daysLate: null,
+                    riskIfSkipped: t.risk_if_skipped ?? null,
+                }));
+
+            const result = await generateWeeklyBriefing(
+                {
+                    profile,
+                    season: seasonForMonth(month),
+                    todayIso,
+                    forecast,
+                    weeklyChecklist,
+                    overdue,
+                    dueSoon,
+                    recentIssues: issuesRes.rows.map((r: any) => ({
+                        taskTitle: r.task_title as string,
+                        doneOn: r.done_on as string,
+                        observation: r.observation ?? null,
+                    })),
+                },
+                { userId: req.userId! },
+            );
+
+            res.json({ success: true, data: { ...result, weatherUsed: forecast.length > 0 } });
+        } catch (error) {
+            sendAiError(res, error, 'house_weekly_briefing');
+        }
+    },
+);
+
+/**
+ * POST /api/ai/house/diagnose
+ * Body: { symptom, location?, since? }
+ * Returns: { diagnosis, model }
+ *
+ * "Il y a une tache brune au plafond du sous-sol" → likely causes, urgency, and
+ * whether this needs a professional. Advice only: it writes nothing and it does
+ * not replace an on-site inspection, which the prompt states explicitly.
+ */
+router.post(
+    '/house/diagnose',
+    validate({ body: houseDiagnoseBodySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const { symptom, location, since } =
+                req.body as import('../schemas/ai').HouseDiagnoseBody;
+
+            const result = await generateHouseDiagnosis(
+                {
+                    profile: await loadCareProfile(req.userId!),
+                    symptom,
+                    location: location ?? null,
+                    since: since ?? null,
+                    season: seasonForMonth(new Date().getMonth() + 1),
+                },
+                { userId: req.userId! },
+            );
+
+            res.json({ success: true, data: result });
+        } catch (error) {
+            sendAiError(res, error, 'house_diagnose');
+        }
+    },
+);
 
 export default router;

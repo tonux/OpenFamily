@@ -19,6 +19,7 @@ import dataTransferRoutes from './routes/dataTransfer';
 import aiRoutes from './routes/ai';
 import weatherRoutes from './routes/weather';
 import houseRoutes from './routes/house';
+import houseCareRoutes from './routes/houseCare';
 import gardenRoutes from './routes/garden';
 import notificationsRoutes from './routes/notifications';
 import documentsRoutes from './routes/documents';
@@ -153,6 +154,9 @@ app.use('/api/planning', planningRoutes);
 app.use('/api/data', dataTransferRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/weather', weatherRoutes);
+// Mounted before /api/house so the care sub-tree resolves to its own router
+// rather than falling through to the equipment routes' 404.
+app.use('/api/house/care', houseCareRoutes);
 app.use('/api/house', houseRoutes);
 app.use('/api/garden', gardenRoutes);
 app.use('/api/notifications', notificationsRoutes);

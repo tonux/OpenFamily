@@ -91,6 +91,19 @@ export const queryKeys = {
         project: (id: string) => [...queryKeys.house.all, 'projects', id] as const,
         dashboard: () => [...queryKeys.house.all, 'dashboard'] as const,
     },
+    // Seasonal care program. Kept as its own root rather than under `house` so
+    // completing a weekly check doesn't invalidate the equipment and contract
+    // lists on every tick.
+    houseCare: {
+        all: ['house-care'] as const,
+        profile: () => [...queryKeys.houseCare.all, 'profile'] as const,
+        tasks: (filters?: Record<string, unknown>) =>
+            [...queryKeys.houseCare.all, 'tasks', filters ?? null] as const,
+        task: (id: string) => [...queryKeys.houseCare.all, 'tasks', id] as const,
+        overview: () => [...queryKeys.houseCare.all, 'overview'] as const,
+        logs: (filters?: Record<string, unknown>) =>
+            [...queryKeys.houseCare.all, 'logs', filters ?? null] as const,
+    },
     documents: {
         all: ['documents'] as const,
         list: (filters?: {

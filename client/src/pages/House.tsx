@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, Button, Input, Tabs, Dialog, useToast } from '../components/ui';
 import EquipmentDialog from '../components/app/EquipmentDialog';
+import HouseCareTab from '../components/app/HouseCareTab';
 import MaintenanceDialog from '../components/app/MaintenanceDialog';
 import ContractDialog from '../components/app/ContractDialog';
 import ContactDialog from '../components/app/ContactDialog';
@@ -108,6 +109,11 @@ const House: React.FC = () => {
     const { t } = useTranslation();
     const tabs = [
         { value: 'equipments', label: t('house.page.tabs.equipments'), content: <EquipmentsTab /> },
+        {
+            value: 'care',
+            label: t('house.page.tabs.care'),
+            content: <HouseCareTab />,
+        },
         {
             value: 'maintenance',
             label: t('house.page.tabs.maintenance'),

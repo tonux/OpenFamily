@@ -115,6 +115,24 @@ import {
     buildVacationLuggageUserPrompt,
     vacationLuggageSystemPrompt,
 } from './prompts/vacationLuggagePrompts';
+import {
+    type HouseCarePlanInput,
+    type HouseDiagnoseInput,
+    type WeeklyBriefingInput,
+    buildHouseCarePlanUserPrompt,
+    buildHouseDiagnoseUserPrompt,
+    buildWeeklyBriefingUserPrompt,
+    houseCarePlanSystemPrompt,
+    houseDiagnoseSystemPrompt,
+    houseWeeklyBriefingSystemPrompt,
+} from './prompts/houseCarePrompts';
+import {
+    CARE_CATEGORIES,
+    CARE_FREQUENCIES,
+    CARE_PRIORITIES,
+    CARE_RESPONSIBILITIES,
+    CARE_SEASONS,
+} from '../lib/houseCareCatalog';
 import type { WeatherSummary } from '../weather/WeatherService';
 
 let cachedProvider: BaseProvider | null = null;
@@ -2560,3 +2578,425 @@ export type {
     StatementSummaryInput,
     StatementTransactionsInput,
 } from './prompts/statementPrompts';
+
+// ---------------------------------------------------------------------------
+// House care — annual plan, weekly briefing, symptom diagnosis
+//
+// All three return PROPOSALS. Nothing here writes to the database: the plan is
+// reviewed and accepted through POST /api/house/care/tasks/bulk, the briefing
+// is read-only, and the diagnosis is advice. Same human-in-the-loop contract as
+// the receipt and garden scanners, for the same reason — a hallucinated
+// maintenance task that silently appears in someone's calendar is worse than no
+// suggestion at all.
+//
+// Every enum coming back from the model is checked against the canonical French
+// list. A hallucinated category or frequency isn't cosmetic here: category
+// drives the UI filters and frequency drives the scheduler, so a task carrying
+// an unknown value would be invisible or never come due again.
+// ---------------------------------------------------------------------------
+
+const CARE_CATEGORY_SET = new Set<string>(CARE_CATEGORIES);
+const CARE_SEASON_SET = new Set<string>(CARE_SEASONS);
+const CARE_FREQUENCY_SET = new Set<string>(CARE_FREQUENCIES);
+const CARE_PRIORITY_SET = new Set<string>(CARE_PRIORITIES);
+const CARE_RESPONSIBILITY_SET = new Set<string>(CARE_RESPONSIBILITIES);
+
+export interface CarePlanTask {
+    title: string;
+    category: string;
+    season: string;
+    frequency: string;
+    intervalMonths: number | null;
+    monthStart: number | null;
+    monthEnd: number | null;
+    priority: string;
+    responsibility: string;
+    estimatedMinutes: number | null;
+    estimatedCost: number | null;
+    riskIfSkipped: string;
+    steps: string[];
+}
+
+export interface CarePlanPriority {
+    title: string;
+    why: string;
+    when: string;
+}
+
+export interface HouseCarePlan {
+    summary: string;
+    tasks: CarePlanTask[];
+    priorities: CarePlanPriority[];
+    budget: { yearlyProvision: number | null; rationale: string };
+    watchouts: string[];
+}
+
+export interface GenerateHouseCarePlanResult {
+    plan: HouseCarePlan;
+    model: string;
+}
+
+/** Bounded integer within [min, max], or null. Shared by the care sanitizers. */
+const careInt = (raw: unknown, min: number, max: number): number | null => {
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(n)) return null;
+    const rounded = Math.round(n);
+    if (rounded < min || rounded > max) return null;
+    return rounded;
+};
+
+const careMoney = (raw: unknown): number | null => {
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(n) || n < 0 || n > 1_000_000) return null;
+    return Math.round(n * 100) / 100;
+};
+
+const sanitizeCarePlanTask = (raw: unknown): CarePlanTask | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const title = trimTo(r.title, 140);
+    const category = trimTo(r.category, 40);
+    const frequency = trimTo(r.frequency, 20);
+
+    // Title, category and frequency are load-bearing — a task missing any of
+    // them can't be filtered or scheduled, so it's dropped rather than guessed.
+    if (!title || !CARE_CATEGORY_SET.has(category) || !CARE_FREQUENCY_SET.has(frequency)) {
+        return null;
+    }
+
+    const season = trimTo(r.season, 20);
+    const priority = trimTo(r.priority, 16);
+    const responsibility = trimTo(r.responsibility, 20);
+
+    let monthStart = careInt(r.monthStart, 1, 12);
+    let monthEnd = careInt(r.monthEnd, 1, 12);
+    // A half-specified window behaves as no window at all, which silently
+    // contradicts the seasonal intent. Drop both or keep both.
+    if (monthStart == null || monthEnd == null) {
+        monthStart = null;
+        monthEnd = null;
+    }
+
+    const weekly = frequency === 'Hebdomadaire';
+    const intervalMonths = weekly ? null : careInt(r.intervalMonths, 1, 360);
+
+    return {
+        title,
+        category,
+        season: CARE_SEASON_SET.has(season) ? season : "Toute l'année",
+        frequency,
+        intervalMonths,
+        monthStart,
+        monthEnd,
+        priority: CARE_PRIORITY_SET.has(priority) ? priority : 'Important',
+        responsibility: CARE_RESPONSIBILITY_SET.has(responsibility) ? responsibility : 'Soi-même',
+        estimatedMinutes: careInt(r.estimatedMinutes, 0, 10_000),
+        estimatedCost: careMoney(r.estimatedCost),
+        riskIfSkipped: trimTo(r.riskIfSkipped, 400),
+        steps: stringArray(r.steps, 6).map((s) => s.slice(0, 400)),
+    };
+};
+
+const sanitizeCarePlan = (raw: unknown): HouseCarePlan | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const tasks: CarePlanTask[] = [];
+    for (const item of Array.isArray(r.tasks) ? r.tasks : []) {
+        if (tasks.length >= 12) break;
+        const task = sanitizeCarePlanTask(item);
+        if (task) tasks.push(task);
+    }
+
+    const priorities: CarePlanPriority[] = [];
+    for (const item of Array.isArray(r.priorities) ? r.priorities : []) {
+        if (priorities.length >= 5) break;
+        if (!item || typeof item !== 'object') continue;
+        const p = item as Record<string, unknown>;
+        const title = trimTo(p.title, 120);
+        if (!title) continue;
+        priorities.push({ title, why: trimTo(p.why, 300), when: trimTo(p.when, 80) });
+    }
+
+    const budgetRaw = (r.budget ?? {}) as Record<string, unknown>;
+    const budget = {
+        yearlyProvision: careMoney(budgetRaw.yearlyProvision),
+        rationale: trimTo(budgetRaw.rationale, 400),
+    };
+
+    const summary = trimTo(r.summary, 600);
+    const watchouts = stringArray(r.watchouts, 5).map((w) => w.slice(0, 260));
+
+    if (tasks.length === 0 && priorities.length === 0 && !summary) return null;
+    return { summary, tasks, priorities, budget, watchouts };
+};
+
+/**
+ * Build a personalised care plan on top of what the user already has.
+ *
+ * Heavy model: the useful output here is a judgement call across the house's
+ * age, climate, systems and existing program — that's exactly where the small
+ * model produces generic filler. No cache: the input changes every time the
+ * program does, and this runs once in a while, not per page load.
+ */
+export const generateHouseCarePlan = async (
+    input: HouseCarePlanInput,
+    ctx: { userId: string },
+): Promise<GenerateHouseCarePlanResult> => {
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: houseCarePlanSystemPrompt },
+                { role: 'user', content: buildHouseCarePlanUserPrompt(input) },
+            ],
+            temperature: 0.4,
+            maxTokens: 3500,
+            jsonMode: true,
+            model: getAiConfig().models.heavy,
+        },
+        { userId: ctx.userId, feature: 'house.care_plan' },
+    );
+
+    const plan = sanitizeCarePlan(safeParseJson(response.content));
+    if (!plan) {
+        throw new AiError('BAD_JSON', 'Model did not return a usable house care plan');
+    }
+    return { plan, model: response.model };
+};
+
+// ---------- Weekly briefing ----------
+
+export interface BriefingFocus {
+    title: string;
+    why: string;
+    when: string;
+    minutes: number | null;
+}
+
+export interface BriefingCheck {
+    label: string;
+    detail: string;
+}
+
+export interface BriefingAlert {
+    level: 'info' | 'attention' | 'urgent';
+    message: string;
+}
+
+export interface WeeklyBriefing {
+    headline: string;
+    summary: string;
+    focus: BriefingFocus[];
+    quickChecks: BriefingCheck[];
+    weatherAlerts: BriefingAlert[];
+    encouragement: string;
+}
+
+export interface GenerateWeeklyBriefingResult {
+    briefing: WeeklyBriefing;
+    model: string;
+}
+
+const ALERT_LEVELS = new Set(['info', 'attention', 'urgent']);
+
+const sanitizeWeeklyBriefing = (raw: unknown): WeeklyBriefing | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const focus: BriefingFocus[] = [];
+    for (const item of Array.isArray(r.focus) ? r.focus : []) {
+        if (focus.length >= 4) break;
+        if (!item || typeof item !== 'object') continue;
+        const f = item as Record<string, unknown>;
+        const title = trimTo(f.title, 120);
+        if (!title) continue;
+        focus.push({
+            title,
+            why: trimTo(f.why, 300),
+            when: trimTo(f.when, 80),
+            minutes: careInt(f.minutes, 0, 1440),
+        });
+    }
+
+    const quickChecks: BriefingCheck[] = [];
+    for (const item of Array.isArray(r.quickChecks) ? r.quickChecks : []) {
+        if (quickChecks.length >= 6) break;
+        if (!item || typeof item !== 'object') continue;
+        const c = item as Record<string, unknown>;
+        const label = trimTo(c.label, 120);
+        if (!label) continue;
+        quickChecks.push({ label, detail: trimTo(c.detail, 260) });
+    }
+
+    const weatherAlerts: BriefingAlert[] = [];
+    for (const item of Array.isArray(r.weatherAlerts) ? r.weatherAlerts : []) {
+        if (weatherAlerts.length >= 3) break;
+        if (!item || typeof item !== 'object') continue;
+        const a = item as Record<string, unknown>;
+        const message = trimTo(a.message, 300);
+        if (!message) continue;
+        const level = trimTo(a.level, 16).toLowerCase();
+        weatherAlerts.push({
+            level: (ALERT_LEVELS.has(level) ? level : 'info') as BriefingAlert['level'],
+            message,
+        });
+    }
+
+    const headline = trimTo(r.headline, 200);
+    const summary = trimTo(r.summary, 600);
+    if (!headline && focus.length === 0 && quickChecks.length === 0) return null;
+
+    return {
+        headline,
+        summary,
+        focus,
+        quickChecks,
+        weatherAlerts,
+        encouragement: trimTo(r.encouragement, 240),
+    };
+};
+
+/**
+ * The weekly assistant. Default model on purpose: the reasoning is shallow
+ * (prioritise a short list against a forecast) and this is the endpoint most
+ * likely to be hit every week by every user, so latency and token cost matter
+ * more than depth here.
+ */
+export const generateWeeklyBriefing = async (
+    input: WeeklyBriefingInput,
+    ctx: { userId: string },
+): Promise<GenerateWeeklyBriefingResult> => {
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: houseWeeklyBriefingSystemPrompt },
+                { role: 'user', content: buildWeeklyBriefingUserPrompt(input) },
+            ],
+            temperature: 0.5,
+            maxTokens: 1400,
+            jsonMode: true,
+        },
+        { userId: ctx.userId, feature: 'house.weekly_briefing' },
+    );
+
+    const briefing = sanitizeWeeklyBriefing(safeParseJson(response.content));
+    if (!briefing) {
+        throw new AiError('BAD_JSON', 'Model did not return a usable weekly briefing');
+    }
+    return { briefing, model: response.model };
+};
+
+// ---------- Symptom diagnosis ----------
+
+export interface DiagnoseCause {
+    cause: string;
+    likelihood: string;
+    explanation: string;
+    howToConfirm: string;
+}
+
+export interface HouseDiagnosis {
+    summary: string;
+    urgency: string;
+    urgencyReason: string;
+    likelyCauses: DiagnoseCause[];
+    immediateActions: string[];
+    callAPro: boolean;
+    proType: string | null;
+    questionsForPro: string[];
+    estimatedCostRange: string | null;
+    redFlags: string[];
+    preventiveTasks: string[];
+}
+
+export interface GenerateHouseDiagnosisResult {
+    diagnosis: HouseDiagnosis;
+    model: string;
+}
+
+const URGENCY_SET = new Set(['Immédiat', 'Cette semaine', 'À surveiller']);
+const LIKELIHOOD_SET = new Set(['Probable', 'Possible', 'Moins probable']);
+
+const sanitizeDiagnosis = (raw: unknown): HouseDiagnosis | null => {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+
+    const likelyCauses: DiagnoseCause[] = [];
+    for (const item of Array.isArray(r.likelyCauses) ? r.likelyCauses : []) {
+        if (likelyCauses.length >= 5) break;
+        if (!item || typeof item !== 'object') continue;
+        const c = item as Record<string, unknown>;
+        const cause = trimTo(c.cause, 140);
+        if (!cause) continue;
+        const likelihood = trimTo(c.likelihood, 20);
+        likelyCauses.push({
+            cause,
+            likelihood: LIKELIHOOD_SET.has(likelihood) ? likelihood : 'Possible',
+            explanation: trimTo(c.explanation, 320),
+            howToConfirm: trimTo(c.howToConfirm, 260),
+        });
+    }
+
+    const summary = trimTo(r.summary, 600);
+    if (!summary && likelyCauses.length === 0) return null;
+
+    const urgency = trimTo(r.urgency, 24);
+    // Default to the cautious end rather than the reassuring one: telling
+    // someone a real problem can wait is the expensive failure mode.
+    const safeUrgency = URGENCY_SET.has(urgency) ? urgency : 'Cette semaine';
+
+    return {
+        summary,
+        urgency: safeUrgency,
+        urgencyReason: trimTo(r.urgencyReason, 260),
+        likelyCauses,
+        immediateActions: stringArray(r.immediateActions, 4).map((s) => s.slice(0, 260)),
+        callAPro: r.callAPro === true,
+        proType: trimTo(r.proType, 60) || null,
+        questionsForPro: stringArray(r.questionsForPro, 4).map((s) => s.slice(0, 260)),
+        estimatedCostRange: trimTo(r.estimatedCostRange, 120) || null,
+        redFlags: stringArray(r.redFlags, 4).map((s) => s.slice(0, 260)),
+        preventiveTasks: stringArray(r.preventiveTasks, 3).map((s) => s.slice(0, 200)),
+    };
+};
+
+/**
+ * Symptom → likely causes, urgency and whether to call a pro.
+ *
+ * Heavy model: this is the endpoint where a shallow answer does actual harm.
+ * Low temperature for the same reason — we want the consensus diagnosis, not a
+ * creative one.
+ */
+export const generateHouseDiagnosis = async (
+    input: HouseDiagnoseInput,
+    ctx: { userId: string },
+): Promise<GenerateHouseDiagnosisResult> => {
+    const response = await AIService.chat(
+        {
+            messages: [
+                { role: 'system', content: houseDiagnoseSystemPrompt },
+                { role: 'user', content: buildHouseDiagnoseUserPrompt(input) },
+            ],
+            temperature: 0.3,
+            maxTokens: 2000,
+            jsonMode: true,
+            model: getAiConfig().models.heavy,
+        },
+        { userId: ctx.userId, feature: 'house.diagnose' },
+    );
+
+    const diagnosis = sanitizeDiagnosis(safeParseJson(response.content));
+    if (!diagnosis) {
+        throw new AiError('BAD_JSON', 'Model did not return a usable diagnosis');
+    }
+    return { diagnosis, model: response.model };
+};
+
+/** Re-export the input shapes so routes build them with proper types. */
+export type {
+    HouseCareProfileInput,
+    HouseCarePlanInput,
+    WeeklyBriefingInput,
+    HouseDiagnoseInput,
+} from './prompts/houseCarePrompts';
