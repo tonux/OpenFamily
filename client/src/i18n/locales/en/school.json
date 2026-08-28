@@ -9,6 +9,7 @@
     },
     "tabs": {
       "overview": "Overview",
+      "schedule": "Schedule",
       "calendar": "Calendar",
       "supplies": "Supplies",
       "study": "Study",
@@ -297,6 +298,63 @@
       "masteryAvg": "Average mastery",
       "deleteConfirm": "Delete this result?",
       "bySubject": "By subject"
+    },
+    "schedule": {
+      "title": "Usual weekly schedule",
+      "subtitle": "The student's typical week. Shared with the family planning —",
+      "openPlanning": "open in Planning",
+      "hours": "Hours",
+      "addSlot": "Add a slot",
+      "addHere": "Add a slot here",
+      "loading": "Loading the schedule…",
+      "saved": "Schedule updated",
+      "deleted": "Slot removed",
+      "confirmDelete": "Remove “{{title}}” from the schedule?",
+      "emptyTitle": "No slot recorded yet",
+      "emptyHint": "Add the slots from the grid the school handed out. One slot can cover several days at once.",
+      "noMemberTitle": "Student not linked to a family member",
+      "noMemberHint": "A schedule belongs to a person. Link {{name}} to a family member (pencil button at the top of the École page) to manage their week.",
+      "days": {
+        "1": "Monday",
+        "2": "Tuesday",
+        "3": "Wednesday",
+        "4": "Thursday",
+        "5": "Friday",
+        "6": "Saturday",
+        "7": "Sunday"
+      },
+      "daysShort": {
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat",
+        "7": "Sun"
+      },
+      "dialog": {
+        "newTitle": "New time slot",
+        "editTitle": "Edit slot",
+        "description": "Tick every day this slot repeats identically.",
+        "titleLabel": "Label",
+        "titlePlaceholder": "e.g. Story time and outdoor free play",
+        "daysLabel": "Days",
+        "selectWeekdays": "Whole week (Mon→Fri)",
+        "startLabel": "Start",
+        "endLabel": "End",
+        "locationLabel": "Location",
+        "locationPlaceholder": "e.g. gym, schoolyard",
+        "notesLabel": "Notes",
+        "replace": "Replace what conflicts"
+      },
+      "errors": {
+        "title": "A label is required.",
+        "days": "Pick at least one day.",
+        "times": "The end time must be after the start time.",
+        "conflict": "Another slot already occupies these hours: {{days}}. Pick different times or replace the existing one.",
+        "save": "Could not save the slot.",
+        "delete": "Could not delete the slot."
+      }
     }
   }
 }

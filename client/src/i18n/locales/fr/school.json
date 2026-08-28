@@ -9,6 +9,7 @@
     },
     "tabs": {
       "overview": "Vue d'ensemble",
+      "schedule": "Horaire",
       "calendar": "Calendrier",
       "supplies": "Fournitures",
       "study": "Étude",
@@ -297,6 +298,63 @@
       "masteryAvg": "Maîtrise moyenne",
       "deleteConfirm": "Supprimer ce résultat ?",
       "bySubject": "Par matière"
+    },
+    "schedule": {
+      "title": "Horaire habituel hebdomadaire",
+      "subtitle": "La semaine type de l'élève. Partagé avec le planning familial —",
+      "openPlanning": "ouvrir dans Planning",
+      "hours": "Heures",
+      "addSlot": "Ajouter une plage",
+      "addHere": "Ajouter une plage ici",
+      "loading": "Chargement de l'horaire…",
+      "saved": "Horaire mis à jour",
+      "deleted": "Plage supprimée",
+      "confirmDelete": "Supprimer « {{title}} » de l'horaire ?",
+      "emptyTitle": "Aucune plage enregistrée",
+      "emptyHint": "Ajoute les plages de la grille remise par l'école. Une plage peut couvrir plusieurs jours d'un coup.",
+      "noMemberTitle": "Élève non relié à un membre de la famille",
+      "noMemberHint": "L'horaire appartient à une personne. Relie {{name}} à un membre de la famille (bouton crayon en haut de la page École) pour gérer sa semaine.",
+      "days": {
+        "1": "Lundi",
+        "2": "Mardi",
+        "3": "Mercredi",
+        "4": "Jeudi",
+        "5": "Vendredi",
+        "6": "Samedi",
+        "7": "Dimanche"
+      },
+      "daysShort": {
+        "1": "Lun",
+        "2": "Mar",
+        "3": "Mer",
+        "4": "Jeu",
+        "5": "Ven",
+        "6": "Sam",
+        "7": "Dim"
+      },
+      "dialog": {
+        "newTitle": "Nouvelle plage horaire",
+        "editTitle": "Modifier la plage",
+        "description": "Coche tous les jours où cette plage revient à l'identique.",
+        "titleLabel": "Intitulé",
+        "titlePlaceholder": "Ex. : Lecture d'un album jeunesse et jeux libres extérieurs",
+        "daysLabel": "Jours",
+        "selectWeekdays": "Toute la semaine (lun→ven)",
+        "startLabel": "Début",
+        "endLabel": "Fin",
+        "locationLabel": "Lieu",
+        "locationPlaceholder": "Ex. : gymnase, cour extérieure",
+        "notesLabel": "Notes",
+        "replace": "Remplacer ce qui est en conflit"
+      },
+      "errors": {
+        "title": "Un intitulé est requis.",
+        "days": "Sélectionne au moins un jour.",
+        "times": "L'heure de fin doit être après l'heure de début.",
+        "conflict": "Une autre plage occupe déjà ces heures : {{days}}. Choisis d'autres horaires ou remplace l'existant.",
+        "save": "Impossible d'enregistrer la plage.",
+        "delete": "Impossible de supprimer la plage."
+      }
     }
   }
 }

@@ -174,4 +174,9 @@ export const queryKeys = {
         }) => [...queryKeys.school.all, 'revision-sheets', filters ?? null] as const,
         revisionBooklets: () => [...queryKeys.school.all, 'revision-booklets'] as const,
     },
+    planning: {
+        all: ['planning'] as const,
+        entries: (filters?: { member_id?: string; schedule_type?: string }) =>
+            [...queryKeys.planning.all, 'entries', filters ?? null] as const,
+    },
 } as const;

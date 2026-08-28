@@ -53,6 +53,7 @@ import {
     useToast,
 } from '../components/ui';
 import EmptyState from '../components/app/EmptyState';
+import SchoolScheduleTab from '../components/app/SchoolScheduleTab';
 import {
     NO_CLASS_EVENT_TYPES,
     SCHOOL_EVENT_TYPES,
@@ -312,6 +313,11 @@ const School: React.FC = () => {
                             value: 'overview',
                             label: t('school.tabs.overview'),
                             content: <OverviewTab student={student} />,
+                        },
+                        {
+                            value: 'schedule',
+                            label: t('school.tabs.schedule'),
+                            content: <SchoolScheduleTab student={student} />,
                         },
                         {
                             value: 'calendar',
