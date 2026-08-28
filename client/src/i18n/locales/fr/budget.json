@@ -41,11 +41,48 @@
       "by_category": "Dépenses par catégorie",
       "distribution": "Répartition",
       "by_member_category": "Dépenses par membre et catégorie",
-      "monthly_evolution": "Évolution mensuelle {{year}}"
+      "monthly_evolution": "Évolution mensuelle {{year}}",
+      "source": {
+        "label": "Source des dépenses",
+        "all": "Tout",
+        "statement": "Relevés",
+        "manual": "Manuel",
+        "hint": {
+          "all": "Relevés + saisie manuelle. Les relevés font foi, le manuel complète (espèces, hors carte).",
+          "statement": "Uniquement ce que la banque a réellement enregistré.",
+          "manual": "Uniquement la saisie manuelle — à vérifier : ces montants peuvent déjà être sur un relevé."
+        },
+        "split": "dont {{statement}} de relevés ({{percent}} %) · {{manual}} saisis à la main"
+      },
+      "coverage": {
+        "title": "Couverture par les relevés",
+        "loading": "Vérification des relevés…",
+        "open": "Voir les relevés",
+        "import": "Importer un relevé",
+        "unknown_account": "Compte inconnu",
+        "summary_complete": "Les {{count}} comptes connus sont couverts pour ce mois.",
+        "summary_incomplete": "{{covered}} compte(s) couverts sur {{total}} — les totaux ci-dessous sont probablement incomplets.",
+        "empty_title": "Aucun relevé importé",
+        "empty_body": "Les statistiques ne reposent que sur la saisie manuelle. Importe le relevé de ta carte de crédit ou de débit pour combler les oublis.",
+        "pending_title": "{{amount}} en attente de confirmation",
+        "pending_body": "{{count}} ligne(s) importée(s) mais pas encore confirmée(s) : elles ne sont comptées dans aucun total ci-dessous.",
+        "status": {
+          "covered": "Couvert",
+          "partial": "Partiel",
+          "missing": "Aucun relevé"
+        },
+        "days_full": "{{days}} jours couverts",
+        "days_partial": "{{days}}/{{total}} jours — manque {{gaps}}",
+        "last_seen": "dernier relevé : {{date}}",
+        "never_seen": "jamais de relevé pour ce compte",
+        "unknown_period": "{{count}} relevé(s) sans période lisible"
+      }
     },
     "chart": {
       "expenses": "Dépenses",
-      "income": "Revenus"
+      "income": "Revenus",
+      "statement_expenses": "Dépenses (relevés)",
+      "manual_expenses": "Dépenses (manuel)"
     },
     "limitsTab": {
       "title": "Limites mensuelles",
@@ -88,7 +125,7 @@
     },
     "receiptScan": {
       "title": "Scanner une facture",
-      "description": "Prends en photo (ou importe) un ticket — l'IA pré-remplit la dépense.",
+      "description": "Description",
       "confidence": {
         "high": "Confiance élevée",
         "medium": "Confiance moyenne",
@@ -118,7 +155,6 @@
       "date": "Date",
       "merchant": "Commerçant",
       "category": "Catégorie",
-      "description": "Description",
       "adjust_hint": "Tu pourras ajuster ces valeurs dans l'étape suivante avant d'enregistrer la dépense.",
       "re_extracting": "Re-extraction…",
       "re_extract": "Re-extraire",
@@ -150,6 +186,10 @@
       "re_analyzing": "Re-analyse…",
       "re_analyze": "Re-analyser",
       "close": "Fermer"
+    },
+    "entry_source": {
+      "statement": "Relevé",
+      "statement_hint": "Ligne créée par la confirmation d'un relevé bancaire."
     }
   }
 }

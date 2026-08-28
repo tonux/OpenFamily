@@ -7,6 +7,7 @@ import { validate } from '../middleware/validate';
 import {
     statementBulkPatchSchema,
     statementConfirmSchema,
+    statementCoverageQuerySchema,
     statementDeleteQuerySchema,
     statementIdParamsSchema,
     statementListQuerySchema,
@@ -644,6 +645,286 @@ router.get('/overview', async (req: AuthRequest, res) => {
         res.status(500).json({ success: false, error: 'Internal server error' });
     }
 });
+
+// ---------------------------------------------------------------------------
+// Coverage helpers
+//
+// A statement period almost never lines up with a calendar month — a card
+// closes on the 14th, a chequing account on the 30th — so "is August covered?"
+// is a question about how a set of intervals overlaps one month, not about
+// whether a statement carries an August date.
+// ---------------------------------------------------------------------------
+
+const DAY_MS = 86_400_000;
+
+/** 'YYYY-MM-DD' → UTC epoch ms. DATE columns arrive as strings (see db.ts). */
+const dayToUtc = (iso: string): number =>
+    Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
+
+const utcToDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+
+interface DayRange {
+    start: number;
+    end: number;
+}
+
+/**
+ * Merge overlapping or touching ranges into the smallest equivalent set.
+ * Ranges are inclusive on both ends, so two periods that meet across a day
+ * boundary (…-07-14 then 07-15-…) count as continuous rather than leaving a
+ * phantom gap between them.
+ */
+const mergeRanges = (ranges: DayRange[]): DayRange[] => {
+    const sorted = [...ranges].sort((a, b) => a.start - b.start);
+    const merged: DayRange[] = [];
+    for (const range of sorted) {
+        const last = merged[merged.length - 1];
+        if (last && range.start <= last.end + DAY_MS) {
+            last.end = Math.max(last.end, range.end);
+        } else {
+            merged.push({ ...range });
+        }
+    }
+    return merged;
+};
+
+/** The parts of [start, end] that `covered` does not reach. */
+const invertRanges = (covered: DayRange[], start: number, end: number): DayRange[] => {
+    const gaps: DayRange[] = [];
+    let cursor = start;
+    for (const range of covered) {
+        if (range.start > cursor) {
+            gaps.push({ start: cursor, end: Math.min(range.start - DAY_MS, end) });
+        }
+        cursor = Math.max(cursor, range.end + DAY_MS);
+        if (cursor > end) break;
+    }
+    if (cursor <= end) {
+        gaps.push({ start: cursor, end });
+    }
+    return gaps.filter((g) => g.start <= g.end);
+};
+
+const rangeDays = (ranges: DayRange[]): number =>
+    ranges.reduce((acc, r) => acc + Math.round((r.end - r.start) / DAY_MS) + 1, 0);
+
+/**
+ * Identity of the account a statement belongs to.
+ *
+ * There is no accounts table: an account is whatever combination of issuer,
+ * label and last-four the extraction read off the document. Normalizing means
+ * "BANQUE X" and "Banque X  " are one card, not two half-covered ones.
+ */
+const accountKey = (row: Record<string, unknown>): string =>
+    [row.issuer, row.account_label, row.card_last4]
+        .map((v) =>
+            String(v ?? '')
+                .trim()
+                .toLowerCase(),
+        )
+        .join('|');
+
+// ---------------------------------------------------------------------------
+// GET /api/statements/coverage?month=&year=
+//
+// Answers the question the budget statistics cannot: is the month the user is
+// looking at actually backed by statements, or is it just whatever got typed
+// in by hand? Returns one row per known account with the days of the month it
+// covers, the gaps it leaves, and the money sitting in a statement that was
+// imported but never confirmed — real spending that no total counts yet.
+//
+// Declared BEFORE /:id so 'coverage' is not read as a UUID.
+// ---------------------------------------------------------------------------
+router.get(
+    '/coverage',
+    validate({ query: statementCoverageQuerySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const { month, year } = req.query as unknown as { month: number; year: number };
+
+            const monthStartMs = Date.UTC(year, month - 1, 1);
+            const monthEndMs = Date.UTC(year, month, 0);
+            const monthStart = utcToDay(monthStartMs);
+            const monthEnd = utcToDay(monthEndMs);
+            const daysInMonth = Math.round((monthEndMs - monthStartMs) / DAY_MS) + 1;
+
+            const result = await query(
+                `SELECT s.id, s.issuer, s.account_label, s.card_last4, s.currency, s.status,
+                        s.statement_date, s.period_start, s.period_end, s.total_purchases,
+                        COUNT(t.id) FILTER (
+                            WHERE t.status = 'pending'
+                              AND t.transaction_date BETWEEN $2 AND $3
+                        )::int AS pending_count,
+                        COALESCE(SUM(t.amount) FILTER (
+                            WHERE t.status = 'pending'
+                              AND t.is_expense = true
+                              AND t.transaction_date BETWEEN $2 AND $3
+                        ), 0) AS pending_amount
+                   FROM bank_statements s
+                   LEFT JOIN bank_statement_transactions t ON t.statement_id = s.id
+                  WHERE s.user_id = $1
+                    AND s.status <> 'failed'
+                  GROUP BY s.id
+                  ORDER BY COALESCE(s.statement_date, s.period_end, s.created_at::date) DESC`,
+                [req.userId, monthStart, monthEnd],
+            );
+
+            interface AccountAcc {
+                key: string;
+                issuer: string | null;
+                account_label: string | null;
+                card_last4: string | null;
+                currency: string;
+                ranges: DayRange[];
+                statements: Array<Record<string, unknown>>;
+                last_statement_date: string | null;
+                pending_count: number;
+                pending_amount: number;
+                unknown_period_count: number;
+            }
+
+            const accounts = new Map<string, AccountAcc>();
+
+            for (const raw of result.rows) {
+                const row = raw as Record<string, unknown>;
+                const key = accountKey(row);
+                let account = accounts.get(key);
+                if (!account) {
+                    account = {
+                        key,
+                        issuer: (row.issuer as string) ?? null,
+                        account_label: (row.account_label as string) ?? null,
+                        card_last4: (row.card_last4 as string) ?? null,
+                        currency: (row.currency as string) ?? 'CAD',
+                        ranges: [],
+                        statements: [],
+                        last_statement_date: null,
+                        pending_count: 0,
+                        pending_amount: 0,
+                        unknown_period_count: 0,
+                    };
+                    accounts.set(key, account);
+                }
+
+                const periodStart = row.period_start ? String(row.period_start) : null;
+                const periodEnd = row.period_end
+                    ? String(row.period_end)
+                    : row.statement_date
+                      ? String(row.statement_date)
+                      : null;
+
+                // The most recent statement of any period, so the UI can say
+                // how stale the account is even when nothing covers this month.
+                const anchor = periodEnd ?? periodStart;
+                if (
+                    anchor &&
+                    (!account.last_statement_date || anchor > account.last_statement_date)
+                ) {
+                    account.last_statement_date = anchor;
+                }
+
+                // A period we could not read contributes no coverage. Guessing
+                // a span would manufacture a green badge over days nobody has
+                // evidence for — the exact false confidence this endpoint is
+                // meant to remove.
+                if (!periodStart || !periodEnd) {
+                    // Only flag it when the one date we do have lands in this
+                    // month; an unreadable period on a statement from March is
+                    // not this month's problem.
+                    if (anchor && anchor >= monthStart && anchor <= monthEnd) {
+                        account.unknown_period_count += 1;
+                    }
+                    continue;
+                }
+
+                const startMs = Math.max(dayToUtc(periodStart), monthStartMs);
+                const endMs = Math.min(dayToUtc(periodEnd), monthEndMs);
+                if (startMs > endMs) {
+                    // The statement does not touch this month at all.
+                    continue;
+                }
+
+                account.ranges.push({ start: startMs, end: endMs });
+                account.pending_count += toNumber(row.pending_count) ?? 0;
+                account.pending_amount += toNumber(row.pending_amount) ?? 0;
+                account.statements.push({
+                    id: row.id,
+                    status: row.status,
+                    statement_date: row.statement_date,
+                    period_start: row.period_start,
+                    period_end: row.period_end,
+                    total_purchases: toNumber(row.total_purchases),
+                    pending_count: toNumber(row.pending_count) ?? 0,
+                    pending_amount: toNumber(row.pending_amount) ?? 0,
+                });
+            }
+
+            const accountList = [...accounts.values()].map((account) => {
+                const merged = mergeRanges(account.ranges);
+                const coveredDays = rangeDays(merged);
+                const gaps = invertRanges(merged, monthStartMs, monthEndMs);
+                return {
+                    key: account.key,
+                    issuer: account.issuer,
+                    account_label: account.account_label,
+                    card_last4: account.card_last4,
+                    currency: account.currency,
+                    status:
+                        coveredDays >= daysInMonth
+                            ? 'covered'
+                            : coveredDays > 0
+                              ? 'partial'
+                              : 'missing',
+                    covered_days: coveredDays,
+                    missing_ranges: gaps.map((g) => ({
+                        start: utcToDay(g.start),
+                        end: utcToDay(g.end),
+                    })),
+                    last_statement_date: account.last_statement_date,
+                    unknown_period_count: account.unknown_period_count,
+                    pending_count: account.pending_count,
+                    pending_amount: Math.round(account.pending_amount * 100) / 100,
+                    statements: account.statements,
+                };
+            });
+
+            // Missing accounts first: the reason to read this panel is what is
+            // absent, not what is fine.
+            const rank = { missing: 0, partial: 1, covered: 2 } as const;
+            accountList.sort(
+                (a, b) =>
+                    rank[a.status as keyof typeof rank] - rank[b.status as keyof typeof rank] ||
+                    (a.issuer ?? '').localeCompare(b.issuer ?? ''),
+            );
+
+            res.json({
+                success: true,
+                data: {
+                    month,
+                    year,
+                    month_start: monthStart,
+                    month_end: monthEnd,
+                    days_in_month: daysInMonth,
+                    accounts: accountList,
+                    total_accounts: accountList.length,
+                    covered_accounts: accountList.filter((a) => a.status === 'covered').length,
+                    partial_accounts: accountList.filter((a) => a.status === 'partial').length,
+                    missing_accounts: accountList.filter((a) => a.status === 'missing').length,
+                    pending_count: accountList.reduce((acc, a) => acc + a.pending_count, 0),
+                    pending_amount:
+                        Math.round(
+                            accountList.reduce((acc, a) => acc + a.pending_amount, 0) * 100,
+                        ) / 100,
+                },
+            });
+        } catch (error) {
+            logger.error('statements.coverage_failed', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            res.status(500).json({ success: false, error: 'Internal server error' });
+        }
+    },
+);
 
 // ---------------------------------------------------------------------------
 // GET /api/statements/:id

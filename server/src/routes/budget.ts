@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { query } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { validate } from '../middleware/validate';
+import {
+    budgetMonthlyStatisticsQuerySchema,
+    budgetStatisticsQuerySchema,
+    type BudgetSource,
+} from '../schemas/budget';
 import { toNullIfEmpty, toOptionalNumber } from '../lib/normalize';
 import logger from '../lib/logger';
 
@@ -30,6 +36,24 @@ const mapBudgetLimit = (row: any) => ({
     month: toNumber(row.month),
     year: toNumber(row.year),
 });
+
+/**
+ * SQL fragment restricting a statistics query to one provenance.
+ *
+ * Appends its parameter to `params` so callers keep control of the numbering.
+ * Returns an empty string for 'all', which is the common case and must not
+ * cost a placeholder.
+ */
+const sourceCondition = (source: BudgetSource, params: any[], column = 'source'): string => {
+    if (source === 'all') {
+        return '';
+    }
+    params.push(source);
+    return ` AND ${column} = $${params.length}`;
+};
+
+/** Zeroed provenance bucket, so the client can render the split before any row exists. */
+const emptySourceTotals = () => ({ expenses: 0, income: 0, entryCount: 0 });
 
 // Get budget entries
 router.get('/entries', async (req: AuthRequest, res) => {
@@ -233,12 +257,10 @@ router.post('/limits', async (req: AuthRequest, res) => {
         const parsedYear = toOptionalNumber(year);
 
         if (!category || parsedLimit === null || parsedMonth === null || parsedYear === null) {
-            return res
-                .status(400)
-                .json({
-                    success: false,
-                    error: 'category, monthly_limit, month and year are required',
-                });
+            return res.status(400).json({
+                success: false,
+                error: 'category, monthly_limit, month and year are required',
+            });
         }
 
         const result = await query(
@@ -260,43 +282,53 @@ router.post('/limits', async (req: AuthRequest, res) => {
 });
 
 // Get budget statistics
-router.get('/statistics', async (req: AuthRequest, res) => {
-    try {
-        const { month, year } = req.query;
-        const parsedMonth = toOptionalNumber(month);
-        const parsedYear = toOptionalNumber(year);
+//
+// `source` narrows every figure to one provenance ('statement' = lines a
+// confirmed bank statement created, 'manual' = hand-typed). `bySource` is
+// deliberately computed WITHOUT that filter: the split has to stay visible
+// while the user is looking at one side of it, otherwise the filter hides the
+// very imbalance it exists to reveal.
+router.get(
+    '/statistics',
+    validate({ query: budgetStatisticsQuerySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const {
+                month: parsedMonth,
+                year: parsedYear,
+                source,
+            } = req.query as unknown as { month: number; year: number; source: BudgetSource };
 
-        if (parsedMonth === null || parsedYear === null) {
-            return res.status(400).json({ success: false, error: 'month and year are required' });
-        }
-
-        const result = await query(
-            `SELECT
+            const categoryParams: any[] = [req.userId, parsedMonth, parsedYear];
+            const result = await query(
+                `SELECT
          category,
          SUM(amount) as category_total
        FROM budget_entries
        WHERE user_id = $1
          AND is_expense = true
          AND EXTRACT(MONTH FROM date) = $2
-         AND EXTRACT(YEAR FROM date) = $3
+         AND EXTRACT(YEAR FROM date) = $3${sourceCondition(source, categoryParams)}
        GROUP BY category`,
-            [req.userId, parsedMonth, parsedYear],
-        );
+                categoryParams,
+            );
 
-        const totals = await query(
-            `SELECT
+            const totalsParams: any[] = [req.userId, parsedMonth, parsedYear];
+            const totals = await query(
+                `SELECT
          SUM(amount) FILTER (WHERE is_expense = true) as total_expenses,
          SUM(amount) FILTER (WHERE is_expense = false) as total_income
        FROM budget_entries
        WHERE user_id = $1
          AND EXTRACT(MONTH FROM date) = $2
-         AND EXTRACT(YEAR FROM date) = $3`,
-            [req.userId, parsedMonth, parsedYear],
-        );
+         AND EXTRACT(YEAR FROM date) = $3${sourceCondition(source, totalsParams)}`,
+                totalsParams,
+            );
 
-        // Per-member spending breakdown by category (for stacked bar chart)
-        const byMember = await query(
-            `SELECT
+            // Per-member spending breakdown by category (for stacked bar chart)
+            const memberParams: any[] = [req.userId, parsedMonth, parsedYear];
+            const byMember = await query(
+                `SELECT
          fm.id as assigned_to,
          fm.name as member_name,
          fm.color as member_color,
@@ -307,83 +339,129 @@ router.get('/statistics', async (req: AuthRequest, res) => {
        WHERE be.user_id = $1
          AND be.is_expense = true
          AND EXTRACT(MONTH FROM be.date) = $2
-         AND EXTRACT(YEAR FROM be.date) = $3
+         AND EXTRACT(YEAR FROM be.date) = $3${sourceCondition(source, memberParams, 'be.source')}
        GROUP BY fm.id, fm.name, fm.color, be.category
        ORDER BY fm.name, be.category`,
-            [req.userId, parsedMonth, parsedYear],
-        );
+                memberParams,
+            );
 
-        const totalExpenses = parseFloat(totals.rows[0]?.total_expenses || '0');
-        const totalIncome = parseFloat(totals.rows[0]?.total_income || '0');
-
-        res.json({
-            success: true,
-            data: {
-                totalExpenses,
-                totalIncome,
-                balance: totalIncome - totalExpenses,
-                byCategory: result.rows.map((row) => ({
-                    category: row.category,
-                    category_total: toNumber(row.category_total),
-                })),
-                byMember: byMember.rows.map((row) => ({
-                    assigned_to: row.assigned_to,
-                    member_name: row.member_name,
-                    member_color: row.member_color,
-                    category: row.category,
-                    amount: toNumber(row.amount),
-                })),
-            },
-        });
-    } catch (error) {
-        logger.error('budget.get_budget_statistics_failed', {
-            error: error instanceof Error ? error.message : String(error),
-        });
-        res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-});
-
-// Get monthly budget statistics for a year
-router.get('/statistics/monthly', async (req: AuthRequest, res) => {
-    try {
-        const { year } = req.query;
-        const parsedYear = toOptionalNumber(year);
-
-        if (parsedYear === null) {
-            return res.status(400).json({ success: false, error: 'year is required' });
-        }
-
-        const result = await query(
-            `SELECT
-         EXTRACT(MONTH FROM date)::int as month,
-         SUM(amount) FILTER (WHERE is_expense = true) as total_expenses,
-         SUM(amount) FILTER (WHERE is_expense = false) as total_income
+            const sourceTotals = await query(
+                `SELECT
+         source,
+         SUM(amount) FILTER (WHERE is_expense = true) as expenses,
+         SUM(amount) FILTER (WHERE is_expense = false) as income,
+         COUNT(*)::int as entry_count
        FROM budget_entries
        WHERE user_id = $1
-         AND EXTRACT(YEAR FROM date) = $2
+         AND EXTRACT(MONTH FROM date) = $2
+         AND EXTRACT(YEAR FROM date) = $3
+       GROUP BY source`,
+                [req.userId, parsedMonth, parsedYear],
+            );
+
+            const bySource: Record<string, ReturnType<typeof emptySourceTotals>> = {
+                statement: emptySourceTotals(),
+                manual: emptySourceTotals(),
+            };
+            for (const row of sourceTotals.rows) {
+                // An unknown source value (a future importer) gets its own
+                // bucket rather than being folded into 'manual' and quietly
+                // misattributed.
+                const key = String(row.source || 'manual');
+                bySource[key] = {
+                    expenses: toNumber(row.expenses),
+                    income: toNumber(row.income),
+                    entryCount: toNumber(row.entry_count),
+                };
+            }
+
+            const totalExpenses = parseFloat(totals.rows[0]?.total_expenses || '0');
+            const totalIncome = parseFloat(totals.rows[0]?.total_income || '0');
+
+            res.json({
+                success: true,
+                data: {
+                    source,
+                    totalExpenses,
+                    totalIncome,
+                    balance: totalIncome - totalExpenses,
+                    bySource,
+                    byCategory: result.rows.map((row) => ({
+                        category: row.category,
+                        category_total: toNumber(row.category_total),
+                    })),
+                    byMember: byMember.rows.map((row) => ({
+                        assigned_to: row.assigned_to,
+                        member_name: row.member_name,
+                        member_color: row.member_color,
+                        category: row.category,
+                        amount: toNumber(row.amount),
+                    })),
+                },
+            });
+        } catch (error) {
+            logger.error('budget.get_budget_statistics_failed', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            res.status(500).json({ success: false, error: 'Internal server error' });
+        }
+    },
+);
+
+// Get monthly budget statistics for a year
+//
+// Each month also carries its expenses split by provenance, which is what
+// turns the yearly chart into a coverage story: a month whose bar is almost
+// entirely 'manual' is a month whose statements were never imported.
+router.get(
+    '/statistics/monthly',
+    validate({ query: budgetMonthlyStatisticsQuerySchema }),
+    async (req: AuthRequest, res) => {
+        try {
+            const { year: parsedYear, source } = req.query as unknown as {
+                year: number;
+                source: BudgetSource;
+            };
+
+            const params: any[] = [req.userId, parsedYear];
+            const result = await query(
+                `SELECT
+         EXTRACT(MONTH FROM date)::int as month,
+         SUM(amount) FILTER (WHERE is_expense = true) as total_expenses,
+         SUM(amount) FILTER (WHERE is_expense = false) as total_income,
+         SUM(amount) FILTER (WHERE is_expense = true AND source = 'statement')
+           as statement_expenses,
+         SUM(amount) FILTER (WHERE is_expense = true AND source <> 'statement')
+           as manual_expenses
+       FROM budget_entries
+       WHERE user_id = $1
+         AND EXTRACT(YEAR FROM date) = $2${sourceCondition(source, params)}
        GROUP BY EXTRACT(MONTH FROM date)
        ORDER BY month`,
-            [req.userId, parsedYear],
-        );
+                params,
+            );
 
-        const monthlyData = Array.from({ length: 12 }, (_, i) => {
-            const monthNum = i + 1;
-            const row = result.rows.find((r) => r.month === monthNum);
-            return {
-                month: monthNum,
-                totalExpenses: row ? toNumber(row.total_expenses) : 0,
-                totalIncome: row ? toNumber(row.total_income) : 0,
-                balance: row ? toNumber(row.total_income) - toNumber(row.total_expenses) : 0,
-            };
-        });
+            const monthlyData = Array.from({ length: 12 }, (_, i) => {
+                const monthNum = i + 1;
+                const row = result.rows.find((r) => r.month === monthNum);
+                return {
+                    month: monthNum,
+                    totalExpenses: row ? toNumber(row.total_expenses) : 0,
+                    totalIncome: row ? toNumber(row.total_income) : 0,
+                    statementExpenses: row ? toNumber(row.statement_expenses) : 0,
+                    manualExpenses: row ? toNumber(row.manual_expenses) : 0,
+                    balance: row ? toNumber(row.total_income) - toNumber(row.total_expenses) : 0,
+                };
+            });
 
-        res.json({ success: true, data: monthlyData });
-    } catch (error) {
-        logger.error('budget.get_monthly_budget_statistics_failed', {
-            error: error instanceof Error ? error.message : String(error),
-        });
-        res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-});
+            res.json({ success: true, data: monthlyData });
+        } catch (error) {
+            logger.error('budget.get_monthly_budget_statistics_failed', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            res.status(500).json({ success: false, error: 'Internal server error' });
+        }
+    },
+);
 
 export default router;

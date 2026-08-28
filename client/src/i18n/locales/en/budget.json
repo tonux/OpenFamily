@@ -41,11 +41,48 @@
       "by_category": "Expenses by category",
       "distribution": "Distribution",
       "by_member_category": "Expenses by member and category",
-      "monthly_evolution": "Monthly trend {{year}}"
+      "monthly_evolution": "Monthly trend {{year}}",
+      "source": {
+        "label": "Expense source",
+        "all": "All",
+        "statement": "Statements",
+        "manual": "Manual",
+        "hint": {
+          "all": "Statements plus manual entries. Statements are the reference; manual fills the gaps (cash, off-card).",
+          "statement": "Only what the bank actually recorded.",
+          "manual": "Manual entries only — worth checking: these amounts may already be on a statement."
+        },
+        "split": "of which {{statement}} from statements ({{percent}}%) · {{manual}} typed in"
+      },
+      "coverage": {
+        "title": "Statement coverage",
+        "loading": "Checking statements…",
+        "open": "View statements",
+        "import": "Import a statement",
+        "unknown_account": "Unknown account",
+        "summary_complete": "All {{count}} known accounts are covered for this month.",
+        "summary_incomplete": "{{covered}} of {{total}} accounts covered — the totals below are likely incomplete.",
+        "empty_title": "No statement imported",
+        "empty_body": "These statistics rest on manual entry alone. Import your credit or debit card statement to catch what was forgotten.",
+        "pending_title": "{{amount}} awaiting confirmation",
+        "pending_body": "{{count}} imported line(s) not confirmed yet: they are counted in none of the totals below.",
+        "status": {
+          "covered": "Covered",
+          "partial": "Partial",
+          "missing": "No statement"
+        },
+        "days_full": "{{days}} days covered",
+        "days_partial": "{{days}}/{{total}} days — missing {{gaps}}",
+        "last_seen": "last statement: {{date}}",
+        "never_seen": "no statement for this account yet",
+        "unknown_period": "{{count}} statement(s) with an unreadable period"
+      }
     },
     "chart": {
       "expenses": "Expenses",
-      "income": "Income"
+      "income": "Income",
+      "statement_expenses": "Expenses (statements)",
+      "manual_expenses": "Expenses (manual)"
     },
     "limitsTab": {
       "title": "Monthly limits",
@@ -88,7 +125,7 @@
     },
     "receiptScan": {
       "title": "Scan a receipt",
-      "description": "Take a photo (or import) a receipt — AI pre-fills the expense.",
+      "description": "Description",
       "confidence": {
         "high": "High confidence",
         "medium": "Medium confidence",
@@ -118,7 +155,6 @@
       "date": "Date",
       "merchant": "Merchant",
       "category": "Category",
-      "description": "Description",
       "adjust_hint": "You'll be able to adjust these values in the next step before saving the expense.",
       "re_extracting": "Re-extracting…",
       "re_extract": "Re-extract",
@@ -150,6 +186,10 @@
       "re_analyzing": "Re-analyzing…",
       "re_analyze": "Re-analyze",
       "close": "Close"
+    },
+    "entry_source": {
+      "statement": "Statement",
+      "statement_hint": "Row created by confirming a bank statement."
     }
   }
 }

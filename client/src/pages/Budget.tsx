@@ -15,10 +15,12 @@ import {
     ScanLine,
     Sparkles,
     Search,
+    FileText,
 } from 'lucide-react';
 import { ReceiptScanDialog, type ExtractedReceipt } from '../components/app/ReceiptScanDialog';
 import { BudgetAnalysisDialog } from '../components/app/BudgetAnalysisDialog';
 import { StatementsTab } from '../components/app/StatementsTab';
+import { StatementCoverageCard, type CoverageData } from '../components/app/StatementCoverageCard';
 import {
     Card,
     CardContent,
@@ -63,6 +65,8 @@ interface BudgetEntry {
     description?: string;
     date: string;
     is_expense: boolean;
+    /** 'statement' when a confirmed bank statement created the row, 'manual' otherwise. */
+    source?: string;
     assigned_to?: string;
     assigned_to_name?: string;
     assigned_to_color?: string;
@@ -76,10 +80,21 @@ interface BudgetLimit {
     year: number;
 }
 
+interface SourceTotals {
+    expenses: number;
+    income: number;
+    entryCount: number;
+}
+
 interface BudgetStats {
     totalExpenses: number;
     totalIncome: number;
     balance: number;
+    /**
+     * Always computed over the whole month, whatever `statsSource` is filtering
+     * on — the split has to stay readable while looking at one side of it.
+     */
+    bySource: Record<string, SourceTotals>;
     byCategory: Array<{ category: string; category_total: number }>;
     byMember: Array<{
         assigned_to: string;
@@ -94,6 +109,8 @@ interface MonthlyStats {
     month: number;
     totalExpenses: number;
     totalIncome: number;
+    statementExpenses: number;
+    manualExpenses: number;
     balance: number;
 }
 
@@ -101,6 +118,20 @@ interface MonthlyStats {
 const CATEGORY_VALUES = ['Alimentation', 'Santé', 'Enfants', 'Maison', 'Loisirs', 'Autre'] as const;
 
 const ENTRIES_PER_PAGE = 10;
+
+/**
+ * Which rows the statistics describe. Statements are the household's reference
+ * — what the bank actually recorded — and manual entries are the complement
+ * that covers cash and anything no card touched. Keeping them separable is
+ * what makes a discrepancy visible instead of averaged away.
+ */
+const STATS_SOURCES = ['all', 'statement', 'manual'] as const;
+type StatsSource = (typeof STATS_SOURCES)[number];
+
+const SOURCE_COLORS: Record<'statement' | 'manual', string> = {
+    statement: 'rgb(var(--primary))',
+    manual: '#f59e0b',
+};
 
 const parsePositiveAmount = (value: string): number => Number(value.replace(',', '.'));
 const toNumber = (value: unknown): number => {
@@ -141,6 +172,10 @@ const Budget: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+    const [activeTab, setActiveTab] = useState('entries');
+    const [statsSource, setStatsSource] = useState<StatsSource>('all');
+    const [coverage, setCoverage] = useState<CoverageData | null>(null);
+    const [coverageLoading, setCoverageLoading] = useState(true);
 
     const [formData, setFormData] = useState({
         category: 'Alimentation',
@@ -163,9 +198,16 @@ const Budget: React.FC = () => {
     useEffect(() => {
         loadEntries();
         loadLimits();
+        loadCoverage();
+    }, [currentMonth, currentYear]);
+
+    // Statistics refetch on the source filter too — the server does the
+    // filtering so the charts and the totals can never disagree about which
+    // rows they describe.
+    useEffect(() => {
         loadStats();
         loadMonthlyStats(currentYear);
-    }, [currentMonth, currentYear]);
+    }, [currentMonth, currentYear, statsSource]);
 
     const loadEntries = async () => {
         try {
@@ -214,14 +256,25 @@ const Budget: React.FC = () => {
     const loadStats = async () => {
         try {
             const response = await api.get<{ success: boolean; data: BudgetStats }>(
-                `/api/budget/statistics?month=${currentMonth}&year=${currentYear}`,
+                `/api/budget/statistics?month=${currentMonth}&year=${currentYear}&source=${statsSource}`,
             );
             if (response.success) {
+                const rawBySource = response.data.bySource || {};
                 setStats({
                     ...response.data,
                     totalExpenses: toNumber(response.data.totalExpenses),
                     totalIncome: toNumber(response.data.totalIncome),
                     balance: toNumber(response.data.balance),
+                    bySource: Object.fromEntries(
+                        Object.entries(rawBySource).map(([key, value]) => [
+                            key,
+                            {
+                                expenses: toNumber(value?.expenses),
+                                income: toNumber(value?.income),
+                                entryCount: toNumber(value?.entryCount),
+                            },
+                        ]),
+                    ),
                     byCategory: (response.data.byCategory || []).map((item) => ({
                         category: item.category,
                         category_total: toNumber(item.category_total),
@@ -240,7 +293,7 @@ const Budget: React.FC = () => {
     const loadMonthlyStats = async (year = currentYear) => {
         try {
             const response = await api.get<{ success: boolean; data: MonthlyStats[] }>(
-                `/api/budget/statistics/monthly?year=${year}`,
+                `/api/budget/statistics/monthly?year=${year}&source=${statsSource}`,
             );
             if (response.success) {
                 setMonthlyStats(
@@ -248,12 +301,32 @@ const Budget: React.FC = () => {
                         ...item,
                         totalExpenses: toNumber(item.totalExpenses),
                         totalIncome: toNumber(item.totalIncome),
+                        statementExpenses: toNumber(item.statementExpenses),
+                        manualExpenses: toNumber(item.manualExpenses),
                         balance: toNumber(item.balance),
                     })),
                 );
             }
         } catch (error) {
             console.error('Failed to load monthly stats:', error);
+        }
+    };
+
+    // Which accounts actually have a statement covering the displayed month.
+    // Loaded alongside the entries rather than with the stats: it does not
+    // depend on the source filter, only on the period.
+    const loadCoverage = async () => {
+        setCoverageLoading(true);
+        try {
+            const response = await api.get<{ success: boolean; data: CoverageData }>(
+                `/api/statements/coverage?month=${currentMonth}&year=${currentYear}`,
+            );
+            setCoverage(response.success ? response.data : null);
+        } catch (error) {
+            console.error('Failed to load statement coverage:', error);
+            setCoverage(null);
+        } finally {
+            setCoverageLoading(false);
         }
     };
 
@@ -461,6 +534,18 @@ const Budget: React.FC = () => {
                     : cat.category_total,
         })) || [];
 
+    // Provenance split for the month, always over every row regardless of the
+    // active filter. Anything that is not 'statement' counts as manual: a
+    // future importer would get its own bucket server-side, but from the user's
+    // point of view it is still "not what the bank told us".
+    const statementExpenses = stats?.bySource?.statement?.expenses ?? 0;
+    const manualExpenses = Object.entries(stats?.bySource ?? {})
+        .filter(([key]) => key !== 'statement')
+        .reduce((sum, [, totals]) => sum + totals.expenses, 0);
+    const monthExpenses = statementExpenses + manualExpenses;
+    const statementShare =
+        monthExpenses > 0 ? Math.round((statementExpenses / monthExpenses) * 100) : null;
+
     if (loading) {
         return (
             <div className="flex h-full items-center justify-center min-h-[50vh]">
@@ -562,6 +647,17 @@ const Budget: React.FC = () => {
                                                             defaultValue: entry.category,
                                                         })}
                                                     </Badge>
+                                                    {entry.source === 'statement' && (
+                                                        <span
+                                                            className="inline-flex items-center gap-1 text-label font-medium text-muted-foreground"
+                                                            title={t(
+                                                                'budget.entry_source.statement_hint',
+                                                            )}
+                                                        >
+                                                            <FileText className="w-3 h-3" />
+                                                            {t('budget.entry_source.statement')}
+                                                        </span>
+                                                    )}
                                                     {entry.assigned_to_name && (
                                                         <span
                                                             className="inline-flex items-center gap-1.5 text-label font-medium px-2 py-0.5 rounded-full"
@@ -669,6 +765,43 @@ const Budget: React.FC = () => {
             label: t('budget.tabs.statistics'),
             content: (
                 <div className="space-y-6">
+                    <StatementCoverageCard
+                        data={coverage}
+                        loading={coverageLoading}
+                        onOpenStatements={() => setActiveTab('statements')}
+                    />
+
+                    {/* Source selector. Statements are the reference figure;
+                        manual entries complete it for cash and anything no card
+                        touched, so 'all' stays the default rather than hiding
+                        half the month behind a filter. */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div
+                            className="inline-flex rounded-pill bg-surface-2 p-1"
+                            role="group"
+                            aria-label={t('budget.stats.source.label')}
+                        >
+                            {STATS_SOURCES.map((value) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => setStatsSource(value)}
+                                    aria-pressed={statsSource === value}
+                                    className={`rounded-pill px-3 py-1.5 text-caption font-medium transition-colors ${
+                                        statsSource === value
+                                            ? 'bg-card text-primary shadow-surface'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                >
+                                    {t('budget.stats.source.' + value)}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-label-sm text-muted-foreground">
+                            {t('budget.stats.source.hint.' + statsSource)}
+                        </p>
+                    </div>
+
                     <div className="flex items-center justify-between gap-3 rounded-card border border-dashed border-primary/40 bg-primary/5 px-4 py-3">
                         <div className="min-w-0">
                             <p className="text-caption font-semibold text-foreground">
@@ -705,6 +838,34 @@ const Budget: React.FC = () => {
                                             </div>
                                             <TrendingDown className="h-8 w-8 text-destructive" />
                                         </div>
+                                        {monthExpenses > 0 && (
+                                            <>
+                                                <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-surface-2">
+                                                    <div
+                                                        className="h-full"
+                                                        style={{
+                                                            width: `${(statementExpenses / monthExpenses) * 100}%`,
+                                                            backgroundColor:
+                                                                SOURCE_COLORS.statement,
+                                                        }}
+                                                    />
+                                                    <div
+                                                        className="h-full"
+                                                        style={{
+                                                            width: `${(manualExpenses / monthExpenses) * 100}%`,
+                                                            backgroundColor: SOURCE_COLORS.manual,
+                                                        }}
+                                                    />
+                                                </div>
+                                                <p className="mt-1.5 text-label text-muted-foreground">
+                                                    {t('budget.stats.source.split', {
+                                                        statement: formatMoney(statementExpenses),
+                                                        percent: statementShare ?? 0,
+                                                        manual: formatMoney(manualExpenses),
+                                                    })}
+                                                </p>
+                                            </>
+                                        )}
                                     </CardContent>
                                 </Card>
                                 <Card className="border-success/20">
@@ -903,6 +1064,9 @@ const Budget: React.FC = () => {
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent>
+                                        {/* Unfiltered, the expense bar is stacked by provenance:
+                                            a month that is almost entirely amber is a month whose
+                                            statements were never imported. */}
                                         <ResponsiveContainer width="100%" height={300}>
                                             <BarChart
                                                 data={monthlyStats.map((m) => ({
@@ -912,6 +1076,10 @@ const Budget: React.FC = () => {
                                                         { locale },
                                                     ),
                                                     [t('budget.chart.expenses')]: m.totalExpenses,
+                                                    [t('budget.chart.statement_expenses')]:
+                                                        m.statementExpenses,
+                                                    [t('budget.chart.manual_expenses')]:
+                                                        m.manualExpenses,
                                                     [t('budget.chart.income')]: m.totalIncome,
                                                 }))}
                                             >
@@ -930,10 +1098,29 @@ const Budget: React.FC = () => {
                                                     }
                                                 />
                                                 <Legend />
-                                                <Bar
-                                                    dataKey={t('budget.chart.expenses')}
-                                                    fill="#ef4444"
-                                                />
+                                                {statsSource === 'all' ? (
+                                                    <>
+                                                        <Bar
+                                                            dataKey={t(
+                                                                'budget.chart.statement_expenses',
+                                                            )}
+                                                            stackId="expenses"
+                                                            fill={SOURCE_COLORS.statement}
+                                                        />
+                                                        <Bar
+                                                            dataKey={t(
+                                                                'budget.chart.manual_expenses',
+                                                            )}
+                                                            stackId="expenses"
+                                                            fill={SOURCE_COLORS.manual}
+                                                        />
+                                                    </>
+                                                ) : (
+                                                    <Bar
+                                                        dataKey={t('budget.chart.expenses')}
+                                                        fill="#ef4444"
+                                                    />
+                                                )}
                                                 <Bar
                                                     dataKey={t('budget.chart.income')}
                                                     fill="#10b981"
@@ -1050,6 +1237,7 @@ const Budget: React.FC = () => {
                         void loadEntries();
                         void loadStats();
                         void loadMonthlyStats();
+                        void loadCoverage();
                     }}
                 />
             ),
@@ -1084,7 +1272,7 @@ const Budget: React.FC = () => {
                 </div>
             </div>
 
-            <Tabs tabs={tabs} />
+            <Tabs tabs={tabs} value={activeTab} onValueChange={setActiveTab} />
 
             {/* Entry Dialog */}
             <Dialog

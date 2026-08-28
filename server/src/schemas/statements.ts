@@ -26,6 +26,18 @@ export const statementListQuerySchema = z
     .strict();
 
 /**
+ * Which calendar month the coverage report describes. A month is the unit the
+ * budget page navigates by, even though statement periods rarely align with
+ * one — reconciling the two is the whole job of the endpoint.
+ */
+export const statementCoverageQuerySchema = z
+    .object({
+        month: z.coerce.number().int().min(1).max(12),
+        year: z.coerce.number().int().min(1970).max(2100),
+    })
+    .strict();
+
+/**
  * Review edits. Every field is optional — the review table sends only what the
  * user actually changed, so a category fix does not have to round-trip the
  * amount and risk clobbering a concurrent edit.
